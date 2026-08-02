@@ -1,0 +1,176 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "量化交易规则分析结果数据结构",
+  "description": "定义量化交易规则文件分析后输出的标准JSON结构，供generate_report.py消费",
+  "type": "object",
+  "required": [
+    "metadata",
+    "strategy_overview",
+    "logic_flow",
+    "key_parameters",
+    "risk_analysis",
+    "effectiveness_evaluation",
+    "optimization_suggestions"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "维度1：文件基本信息",
+      "required": ["file_name", "model_name", "model_version", "model_type", "holding_period", "target_return", "core_principle"],
+      "properties": {
+        "file_name": { "type": "string", "description": "源文件名" },
+        "model_name": { "type": "string", "description": "模型名称，如 V9.3-ST" },
+        "model_version": { "type": "string", "description": "版本号，如 V9.3" },
+        "model_type": { "type": "string", "description": "模型类型：超短线/中长期/波段等" },
+        "holding_period": { "type": "string", "description": "持有周期，如 次日清仓 / 3-12个月" },
+        "target_return": { "type": "string", "description": "目标收益区间" },
+        "core_principle": { "type": "string", "description": "核心原则一句话概括" },
+        "document_scope": { "type": "string", "description": "文档涵盖范围说明" }
+      }
+    },
+    "strategy_overview": {
+      "type": "object",
+      "description": "维度2：核心交易策略概述",
+      "required": ["positioning", "core_factors", "scoring_formula", "decision_thresholds", "key_rules"],
+      "properties": {
+        "positioning": { "type": "string", "description": "模型定位与设计目标" },
+        "core_factors": {
+          "type": "array",
+          "description": "核心因子/选股维度列表",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "因子/维度名称" },
+              "weight": { "type": "string", "description": "权重，如 25%" },
+              "description": { "type": "string", "description": "因子说明" }
+            }
+          }
+        },
+        "scoring_formula": { "type": "string", "description": "评分公式文本" },
+        "decision_thresholds": {
+          "type": "array",
+          "description": "决策阈值列表",
+          "items": {
+            "type": "object",
+            "properties": {
+              "condition": { "type": "string", "description": "阈值条件，如 评分≥8.5分" },
+              "action": { "type": "string", "description": "对应操作，如 强烈推荐配置" }
+            }
+          }
+        },
+        "key_rules": {
+          "type": "array",
+          "description": "核心交易纪律列表",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "logic_flow": {
+      "type": "array",
+      "description": "维度3：规则逻辑流程（步骤数组）",
+      "items": {
+        "type": "object",
+        "required": ["step", "action", "output"],
+        "properties": {
+          "step": { "type": "integer", "description": "步骤序号" },
+          "time": { "type": "string", "description": "时间点（若有），如 14:30" },
+          "action": { "type": "string", "description": "执行动作" },
+          "condition": { "type": "string", "description": "触发条件" },
+          "output": { "type": "string", "description": "输出/结果" }
+        }
+      }
+    },
+    "key_parameters": {
+      "type": "object",
+      "description": "维度4：关键参数说明（分类）",
+      "properties": {
+        "position_management": {
+          "type": "array",
+          "description": "仓位管理参数",
+          "items": { "$ref": "#/definitions/parameter" }
+        },
+        "risk_control": {
+          "type": "array",
+          "description": "风险控制参数",
+          "items": { "$ref": "#/definitions/parameter" }
+        },
+        "scoring": {
+          "type": "array",
+          "description": "评分参数",
+          "items": { "$ref": "#/definitions/parameter" }
+        },
+        "timing": {
+          "type": "array",
+          "description": "时间参数",
+          "items": { "$ref": "#/definitions/parameter" }
+        },
+        "filtering": {
+          "type": "array",
+          "description": "筛选/剔除参数",
+          "items": { "$ref": "#/definitions/parameter" }
+        }
+      }
+    },
+    "risk_analysis": {
+      "type": "array",
+      "description": "维度5：潜在风险点分析",
+      "items": {
+        "type": "object",
+        "required": ["description", "level", "scenario", "impact"],
+        "properties": {
+          "description": { "type": "string", "description": "风险描述" },
+          "level": { "type": "string", "enum": ["高", "中", "低"], "description": "风险等级" },
+          "scenario": { "type": "string", "description": "触发场景" },
+          "impact": { "type": "string", "description": "影响范围" }
+        }
+      }
+    },
+    "effectiveness_evaluation": {
+      "type": "object",
+      "description": "维度6：规则有效性评估",
+      "required": ["strengths", "weaknesses", "backtesting_status", "adaptability", "completeness", "completeness_reason"],
+      "properties": {
+        "strengths": {
+          "type": "array",
+          "description": "规则优势",
+          "items": { "type": "string" }
+        },
+        "weaknesses": {
+          "type": "array",
+          "description": "规则不足",
+          "items": { "type": "string" }
+        },
+        "backtesting_status": { "type": "string", "description": "回测验证状态" },
+        "adaptability": { "type": "string", "description": "市场环境适应性" },
+        "completeness": { "type": "integer", "minimum": 1, "maximum": 10, "description": "规则完整性评分1-10" },
+        "completeness_reason": { "type": "string", "description": "完整性评分理由" }
+      }
+    },
+    "optimization_suggestions": {
+      "type": "array",
+      "description": "维度7：优化建议",
+      "items": {
+        "type": "object",
+        "required": ["suggestion", "priority", "expected_effect", "difficulty"],
+        "properties": {
+          "suggestion": { "type": "string", "description": "建议内容" },
+          "priority": { "type": "string", "enum": ["高", "中", "低"], "description": "优先级" },
+          "expected_effect": { "type": "string", "description": "预期效果" },
+          "difficulty": { "type": "string", "enum": ["高", "中", "低"], "description": "实施难度" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "parameter": {
+      "type": "object",
+      "required": ["name", "value"],
+      "properties": {
+        "name": { "type": "string", "description": "参数名" },
+        "value": { "type": "string", "description": "取值/规则" },
+        "condition": { "type": "string", "description": "触发条件" },
+        "source": { "type": "string", "description": "数据来源" }
+      }
+    }
+  }
+}
