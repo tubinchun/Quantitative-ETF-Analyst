@@ -31,70 +31,217 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 import numpy as np
 
-# 导入共享样式模块
-from report_styles import (
-    register_fonts, get_styles, safe_get, make_para, make_table,
-    make_risk_table, make_info_box, make_section_divider, make_section_banner,
-    make_badge, make_score_bar, make_kpi_card,
-    build_cover_page, build_pdf, setup_matplotlib_style,
-    HeaderFooterCanvas, create_doc,
-    COLOR_PRIMARY, COLOR_PRIMARY_LIGHT, COLOR_PRIMARY_DARK,
-    COLOR_ACCENT, COLOR_ACCENT_LIGHT,
-    COLOR_DANGER, COLOR_WARNING, COLOR_SUCCESS, COLOR_INFO,
-    COLOR_BG_LIGHT, COLOR_BG_TABLE_ALT, COLOR_ACCENT_PALE,
-    COLOR_DANGER_LIGHT, COLOR_WARNING_LIGHT, COLOR_SUCCESS_LIGHT,
-    COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_MUTED, COLOR_WHITE,
-    COLOR_BORDER, COLOR_BORDER_DARK, COLOR_DIVIDER,
-    COLOR_SECTOR_PALETTE,
-    FONT_NORMAL, FONT_BOLD, FONT_LIGHT,
-    PAGE_SIZE, PAGE_WIDTH, PAGE_HEIGHT,
-    MARGIN_TOP, MARGIN_BOTTOM, MARGIN_LEFT, MARGIN_RIGHT, CONTENT_WIDTH,
-)
+# ============================================================
+# 字体注册（中文支持）
+# ============================================================
+FONT_REGISTERED = False
+FONT_NORMAL = 'Helvetica'
+FONT_BOLD = 'Helvetica-Bold'
 
-# 兼容旧代码中的别名
-COLOR_SECONDARY = COLOR_PRIMARY_LIGHT
-COLOR_GOLD = COLOR_ACCENT
-COLOR_GOLD_LIGHT = COLOR_ACCENT_LIGHT
-COLOR_HIGH_RISK = COLOR_DANGER
-COLOR_MED_RISK = COLOR_WARNING
-COLOR_LOW_RISK = COLOR_SUCCESS
-COLOR_BG_TABLE = COLOR_BG_TABLE_ALT
-COLOR_BG_HIGHLIGHT = COLOR_ACCENT_PALE
-COLOR_BG_RISK_HIGH = COLOR_DANGER_LIGHT
-COLOR_BG_RISK_MED = COLOR_WARNING_LIGHT
-COLOR_BG_RISK_LOW = COLOR_SUCCESS_LIGHT
-COLOR_TEXT_LIGHT = COLOR_TEXT_SECONDARY
-COLOR_HIGH = COLOR_DANGER
-COLOR_MED = COLOR_WARNING
-COLOR_LOW = COLOR_SUCCESS
+def register_fonts():
+    """注册中文字体"""
+    global FONT_REGISTERED, FONT_NORMAL, FONT_BOLD
+    if FONT_REGISTERED:
+        return
 
-# 场景配色（走势报告专用，v2.0 配色）
+    font_candidates = [
+        (r'C:\Windows\Fonts\msyh.ttc', 'MSYH', 'MSYH-Bold'),
+        (r'C:\Windows\Fonts\msyhbd.ttc', None, 'MSYH-Bold'),
+        (r'C:\Windows\Fonts\simsun.ttc', 'SimSun', 'SimSun-Bold'),
+        (r'C:\Windows\Fonts\simhei.ttf', 'SimHei', 'SimHei'),
+    ]
+
+    normal_registered = False
+    bold_registered = False
+
+    for path, normal_name, bold_name in font_candidates:
+        if not os.path.exists(path):
+            continue
+        try:
+            if normal_name and not normal_registered:
+                pdfmetrics.registerFont(TTFont(normal_name, path))
+                FONT_NORMAL = normal_name
+                normal_registered = True
+            if bold_name and not bold_registered:
+                if normal_name and path == r'C:\Windows\Fonts\msyh.ttc':
+                    try:
+                        pdfmetrics.registerFont(TTFont(bold_name, r'C:\Windows\Fonts\msyhbd.ttc'))
+                        FONT_BOLD = bold_name
+                        bold_registered = True
+                    except Exception:
+                        FONT_BOLD = normal_name or FONT_NORMAL
+                elif path == r'C:\Windows\Fonts\simhei.ttf':
+                    pdfmetrics.registerFont(TTFont(bold_name, path))
+                    FONT_BOLD = bold_name
+                    bold_registered = True
+                else:
+                    FONT_BOLD = normal_name or FONT_NORMAL
+                    bold_registered = True
+        except Exception:
+            continue
+
+    if not normal_registered:
+        FONT_NORMAL = 'Helvetica'
+        FONT_BOLD = 'Helvetica-Bold'
+    if not bold_registered:
+        FONT_BOLD = FONT_NORMAL
+    FONT_REGISTERED = True
+
+
+# ============================================================
+# 颜色定义
+# ============================================================
+COLOR_PRIMARY = HexColor('#1a5276')
+COLOR_SECONDARY = HexColor('#2e86c1')
+COLOR_ACCENT = HexColor('#e74c3c')
+COLOR_BG_LIGHT = HexColor('#ebf5fb')
+COLOR_BG_TABLE = HexColor('#f8f9fa')
+COLOR_TEXT = HexColor('#2c3e50')
+COLOR_TEXT_LIGHT = HexColor('#7f8c8d')
+COLOR_BORDER = HexColor('#bdc3c7')
+COLOR_HIGH = HexColor('#e74c3c')
+COLOR_MED = HexColor('#f39c12')
+COLOR_LOW = HexColor('#27ae60')
 COLOR_SCENARIO = {
-    'S1': COLOR_DANGER,        # 高开-红
-    'S2': COLOR_SUCCESS,        # 平开-绿
-    'S3': COLOR_WARNING,        # 低开-橙
-    'S4': HexColor('#8E44AD'),  # 极端-紫
+    'S1': HexColor('#e74c3c'),   # 高开-红
+    'S2': HexColor('#27ae60'),   # 平开-绿
+    'S3': HexColor('#f39c12'),   # 低开-橙
+    'S4': HexColor('#8e44ad'),   # 极端-紫
 }
 
-# 以下样式/辅助函数由共享模块 report_styles.py 提供：
-#   register_fonts, get_styles, safe_get, make_para, make_table 等
+
+# ============================================================
+# 样式定义
+# ============================================================
+def get_styles():
+    styles = getSampleStyleSheet()
+
+    style_title = ParagraphStyle(
+        'ReportTitle', parent=styles['Title'],
+        fontName=FONT_BOLD, fontSize=24, leading=34,
+        textColor=COLOR_PRIMARY, alignment=TA_CENTER, spaceAfter=10
+    )
+    style_subtitle = ParagraphStyle(
+        'ReportSubtitle', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=13, leading=18,
+        textColor=COLOR_TEXT_LIGHT, alignment=TA_CENTER, spaceAfter=6
+    )
+    style_h1 = ParagraphStyle(
+        'SectionH1', parent=styles['Heading1'],
+        fontName=FONT_BOLD, fontSize=16, leading=24,
+        textColor=white, alignment=TA_LEFT,
+        backColor=COLOR_PRIMARY,
+        borderPadding=(8, 10, 8, 10),
+        spaceBefore=20, spaceAfter=12, leftIndent=0
+    )
+    style_h2 = ParagraphStyle(
+        'SectionH2', parent=styles['Heading2'],
+        fontName=FONT_BOLD, fontSize=12, leading=17,
+        textColor=COLOR_PRIMARY, alignment=TA_LEFT,
+        spaceBefore=12, spaceAfter=6, leftIndent=0
+    )
+    style_body = ParagraphStyle(
+        'BodyText', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=10, leading=16,
+        textColor=COLOR_TEXT, alignment=TA_JUSTIFY, spaceAfter=6
+    )
+    style_bullet = ParagraphStyle(
+        'BulletText', parent=style_body,
+        leftIndent=18, bulletIndent=6, spaceAfter=4
+    )
+    style_cell = ParagraphStyle(
+        'TableCell', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=8.5, leading=12,
+        textColor=COLOR_TEXT, alignment=TA_LEFT
+    )
+    style_cell_center = ParagraphStyle(
+        'TableCellCenter', parent=style_cell, alignment=TA_CENTER
+    )
+    style_header = ParagraphStyle(
+        'TableHeader', parent=styles['Normal'],
+        fontName=FONT_BOLD, fontSize=9, leading=12,
+        textColor=white, alignment=TA_CENTER
+    )
+    style_disclaimer = ParagraphStyle(
+        'Disclaimer', parent=style_body,
+        fontSize=8.5, leading=13, textColor=COLOR_TEXT_LIGHT,
+        leftIndent=10, rightIndent=10
+    )
+    style_highlight = ParagraphStyle(
+        'Highlight', parent=style_body,
+        fontName=FONT_BOLD, fontSize=10.5, leading=16,
+        textColor=COLOR_ACCENT, alignment=TA_CENTER,
+        backColor=HexColor('#fdf2e9'), borderPadding=(8, 10, 8, 10),
+        spaceBefore=6, spaceAfter=10
+    )
+
+    return {
+        'title': style_title, 'subtitle': style_subtitle,
+        'h1': style_h1, 'h2': style_h2,
+        'body': style_body, 'bullet': style_bullet,
+        'cell': style_cell, 'cell_center': style_cell_center,
+        'header': style_header, 'disclaimer': style_disclaimer,
+        'highlight': style_highlight,
+    }
+
+
+# ============================================================
+# 辅助函数
+# ============================================================
+def safe_get(data, key, default='—'):
+    val = data.get(key, default) if isinstance(data, dict) else default
+    if val is None or val == '':
+        return default
+    return val
+
+
+def make_para(text, style_key='cell', styles=None):
+    if styles is None:
+        return Paragraph(str(text), get_styles()['cell'])
+    text = str(text) if text is not None else '—'
+    return Paragraph(text, styles[style_key])
+
+
+def make_table(data, col_widths, styles, header_color=COLOR_PRIMARY):
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), header_color),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 1), (-1, -1), FONT_NORMAL),
+        ('FONTSIZE', (0, 1), (-1, -1), 8.5),
+        ('TEXTCOLOR', (0, 1), (-1, -1), COLOR_TEXT),
+        ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.2, COLOR_PRIMARY),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]
+    for i in range(1, len(data)):
+        if i % 2 == 0:
+            style_cmds.append(('BACKGROUND', (0, i), (-1, i), COLOR_BG_TABLE))
+    table.setStyle(TableStyle(style_cmds))
+    return table
 
 
 # ============================================================
 # 场景概率分布图
 # ============================================================
 def generate_scenario_chart(scenarios, output_path):
-    """生成场景概率分布饼图（v2.0 配色）"""
+    """生成场景概率分布饼图"""
     if not scenarios:
         return None
 
-    setup_matplotlib_style()
     plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'SimSun']
     plt.rcParams['axes.unicode_minus'] = False
 
     labels = []
     sizes = []
-    pie_colors = []
+    colors = []
     for s in scenarios:
         prob_str = safe_get(s, 'probability', '0%').replace('%', '')
         try:
@@ -104,20 +251,18 @@ def generate_scenario_chart(scenarios, output_path):
         labels.append(f"{safe_get(s, 'scenario_name')}\n({safe_get(s, 'probability')})")
         sizes.append(prob)
         sid = safe_get(s, 'scenario_id', 'S1')
-        # v2.0 场景配色
         color_map = {
-            'S1': COLOR_DANGER,
-            'S2': COLOR_SUCCESS,
-            'S3': COLOR_WARNING,
-            'S4': HexColor('#8E44AD'),
+            'S1': '#e74c3c',
+            'S2': '#27ae60',
+            'S3': '#f39c12',
+            'S4': '#8e44ad',
         }
-        pie_colors.append(color_map.get(sid, COLOR_PRIMARY_LIGHT))
+        colors.append(color_map.get(sid, '#2e86c1'))
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    fig.patch.set_facecolor('#FFFFFF')
     wedges, texts, autotexts = ax.pie(
-        sizes, labels=labels, colors=pie_colors, autopct='%1.0f%%',
-        startangle=90, textprops={'fontsize': 9, 'fontweight': 'bold', 'color': COLOR_TEXT},
+        sizes, labels=labels, colors=colors, autopct='%1.0f%%',
+        startangle=90, textprops={'fontsize': 9, 'fontweight': 'bold'},
         pctdistance=0.75, labeldistance=1.15
     )
     for autotext in autotexts:
@@ -125,7 +270,7 @@ def generate_scenario_chart(scenarios, output_path):
         autotext.set_fontsize(11)
 
     ax.set_title('下周一市场场景概率分布', fontsize=13, fontweight='bold',
-                 color=COLOR_PRIMARY, pad=20)
+                 color='#1a5276', pad=20)
     ax.axis('equal')
 
     plt.tight_layout()
@@ -139,22 +284,21 @@ def generate_scenario_chart(scenarios, output_path):
 # 执行时间线图
 # ============================================================
 def generate_timeline_chart(timeline, output_path):
-    """生成执行时间线图（v2.0 配色）"""
+    """生成执行时间线图"""
     if not timeline:
         return None
 
-    setup_matplotlib_style()
     plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'SimSun']
     plt.rcParams['axes.unicode_minus'] = False
 
     n_steps = len(timeline)
     fig_height = max(7, n_steps * 0.9)
     fig, ax = plt.subplots(figsize=(10, fig_height))
-    fig.patch.set_facecolor('#FFFFFF')
-    ax.set_facecolor('#F8FAFC')
     ax.set_xlim(0, 10)
     ax.set_ylim(0, n_steps + 1)
     ax.axis('off')
+    ax.set_facecolor('white')
+    fig.patch.set_facecolor('white')
 
     box_w = 8.5
     box_h = 0.65
@@ -165,12 +309,12 @@ def generate_timeline_chart(timeline, output_path):
         y = y_start - i - 0.5
         action = str(safe_get(step, 'action', ''))
         is_key = '关键' in action or '暴雨' in action or '买入' in action or '执行' in action
-        color = COLOR_DANGER if is_key else COLOR_PRIMARY_LIGHT
+        color = '#c0392b' if is_key else '#2e86c1'
 
         box = FancyBboxPatch(
             (x_center - box_w / 2, y - box_h / 2), box_w, box_h,
             boxstyle="round,pad=0.1",
-            facecolor=color, edgecolor=COLOR_PRIMARY_DARK, linewidth=1.2, alpha=0.92
+            facecolor=color, edgecolor='#1a5276', linewidth=1.2, alpha=0.92
         )
         ax.add_patch(box)
 
@@ -192,13 +336,13 @@ def generate_timeline_chart(timeline, output_path):
                 (x_center, y - box_h / 2 - 0.05),
                 (x_center, y - 0.95 + box_h / 2 + 0.05),
                 arrowstyle='->,head_width=0.3,head_length=0.2',
-                color=COLOR_TEXT_SECONDARY, linewidth=1.5
+                color='#566573', linewidth=1.5
             )
             ax.add_patch(arrow)
 
     ax.text(x_center, y_start + 0.4, '下周一执行时间线',
             ha='center', va='center', fontsize=13, fontweight='bold',
-            color=COLOR_PRIMARY)
+            color='#1a5276')
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight',
@@ -211,19 +355,39 @@ def generate_timeline_chart(timeline, output_path):
 # 各章节构建函数
 # ============================================================
 def build_cover(story, data, styles):
-    """封面页（使用共享样式模块的封面构建器）"""
+    """封面页"""
     meta = data.get('metadata', {})
-    build_cover_page(story, styles,
-                     title='下周一走势分析报告',
-                     subtitle='基于V9.3-ST策略规则的场景推演',
-                     info_items=[
-                         {'label': '目标日期', 'value': safe_get(meta, 'target_date')},
-                         {'label': '使用策略', 'value': safe_get(meta, 'strategy_used')},
-                         {'label': '策略版本', 'value': safe_get(meta, 'strategy_version')},
-                         {'label': '分析类型', 'value': safe_get(meta, 'analysis_type')},
-                         {'label': '分析日期', 'value': safe_get(meta, 'analysis_date')},
-                         {'label': '数据来源', 'value': safe_get(meta, 'data_source')},
-                     ])
+    story.append(Spacer(1, 50 * mm))
+
+    story.append(Paragraph('下周一走势分析报告', styles['title']))
+    story.append(Spacer(1, 8 * mm))
+    story.append(Paragraph('基于V9.3-ST策略规则的场景推演', styles['subtitle']))
+    story.append(Spacer(1, 20 * mm))
+
+    line_table = Table([['']], colWidths=[120 * mm])
+    line_table.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, -1), 2, COLOR_PRIMARY)]))
+    story.append(line_table)
+    story.append(Spacer(1, 25 * mm))
+
+    cover_info = [
+        ['目标日期', safe_get(meta, 'target_date')],
+        ['使用策略', safe_get(meta, 'strategy_used')],
+        ['策略版本', safe_get(meta, 'strategy_version')],
+        ['分析类型', safe_get(meta, 'analysis_type')],
+        ['分析日期', safe_get(meta, 'analysis_date')],
+        ['数据来源', safe_get(meta, 'data_source')],
+        ['核心原则', safe_get(meta, 'core_principle')],
+    ]
+    cover_data = [[make_para(k, 'cell', styles), make_para(v, 'cell', styles)] for k, v in cover_info]
+    story.append(make_table([['字段', '内容']] + cover_data, [45 * mm, 95 * mm], styles))
+    story.append(Spacer(1, 25 * mm))
+
+    story.append(Paragraph(
+        '本报告基于V9.3-ST超短线量化交易模型规则，对下周一可能的市场场景进行推演分析，'
+        '输出各场景下的策略执行决策与操作建议。',
+        styles['subtitle']
+    ))
+    story.append(PageBreak())
 
 
 def build_metadata(story, data, styles):
@@ -231,7 +395,7 @@ def build_metadata(story, data, styles):
     meta = data.get('metadata', {})
     story.append(Paragraph('一、分析概述', styles['h1']))
 
-    story.append(make_section_banner('1.1 分析背景', styles))
+    story.append(Paragraph('1.1 分析背景', styles['h2']))
     story.append(Paragraph(
         f"本报告针对 {safe_get(meta, 'target_date')} 进行走势场景推演，"
         f"基于 {safe_get(meta, 'strategy_used')} 的交易规则体系，"
@@ -240,15 +404,13 @@ def build_metadata(story, data, styles):
         styles['body']
     ))
 
-    story.append(make_section_banner('1.2 数据说明', styles))
+    story.append(Paragraph('1.2 数据说明', styles['h2']))
     story.append(Paragraph(safe_get(meta, 'data_source'), styles['body']))
     story.append(Spacer(1, 3 * mm))
     story.append(Paragraph(
         f"<b>重要提示：</b>{safe_get(meta, 'disclaimer')}",
         styles['highlight']
     ))
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_scenarios(story, data, styles, temp_dir):
@@ -333,8 +495,6 @@ def build_scenarios(story, data, styles, temp_dir):
         story.append(Paragraph(f'<b>预期结果：</b>{safe_get(s, "expected_outcome")}', styles['body']))
         story.append(Spacer(1, 6 * mm))
 
-    story.append(make_section_divider())
-
 
 def build_decision_matrix(story, data, styles):
     """场景决策矩阵"""
@@ -345,7 +505,7 @@ def build_decision_matrix(story, data, styles):
         story.append(Paragraph('未配置决策矩阵。', styles['body']))
         return
 
-    story.append(make_section_banner('3.1 各市场状态下策略执行对照表', styles))
+    story.append(Paragraph('3.1 各市场状态下策略执行对照表', styles['h2']))
 
     matrix_data = [['市场状态', 'F91状态', '仓位上限', '候选策略', '优先因子', '风险等级']]
     for m in matrix:
@@ -367,7 +527,7 @@ def build_decision_matrix(story, data, styles):
         if level == '高':
             color = COLOR_HIGH
         elif level == '中高':
-            color = HexColor('#D35400')
+            color = HexColor('#d35400')
         elif level == '中':
             color = COLOR_MED
         else:
@@ -379,7 +539,6 @@ def build_decision_matrix(story, data, styles):
 
     story.append(table)
     story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_timeline(story, data, styles, temp_dir):
@@ -404,7 +563,7 @@ def build_timeline(story, data, styles, temp_dir):
         story.append(Paragraph(f'[时间线图生成失败: {e}]', styles['body']))
 
     # 步骤详表
-    story.append(make_section_banner('4.1 执行步骤详表', styles))
+    story.append(Paragraph('4.1 执行步骤详表', styles['h2']))
     tl_data = [['步骤', '时间', '执行动作', '详细说明']]
     for step in timeline:
         tl_data.append([
@@ -414,8 +573,6 @@ def build_timeline(story, data, styles, temp_dir):
             make_para(safe_get(step, 'detail'), 'cell', styles),
         ])
     story.append(make_table(tl_data, [12 * mm, 22 * mm, 45 * mm, 86 * mm], styles))
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_risk_alerts(story, data, styles):
@@ -453,8 +610,6 @@ def build_risk_alerts(story, data, styles):
         table.setStyle(TableStyle(style_cmds))
 
     story.append(table)
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_recommendations(story, data, styles):
@@ -490,8 +645,6 @@ def build_recommendations(story, data, styles):
         table.setStyle(TableStyle(style_cmds))
 
     story.append(table)
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_summary(story, data, styles):
@@ -499,22 +652,20 @@ def build_summary(story, data, styles):
     summary = data.get('summary', {})
     story.append(Paragraph('七、分析总结', styles['h1']))
 
-    story.append(make_section_banner('7.1 核心观点', styles))
+    story.append(Paragraph('7.1 核心观点', styles['h2']))
     story.append(Paragraph(safe_get(summary, 'core_view'), styles['body']))
 
-    story.append(make_section_banner('7.2 关键关注点', styles))
+    story.append(Paragraph('7.2 关键关注点', styles['h2']))
     story.append(Paragraph(safe_get(summary, 'key_focus'), styles['body']))
 
-    story.append(make_section_banner('7.3 仓位指引', styles))
+    story.append(Paragraph('7.3 仓位指引', styles['h2']))
     story.append(Paragraph(safe_get(summary, 'position_guidance'), styles['body']))
 
-    story.append(make_section_banner('7.4 风险优先级', styles))
+    story.append(Paragraph('7.4 风险优先级', styles['h2']))
     story.append(Paragraph(safe_get(summary, 'risk_priority'), styles['body']))
 
     story.append(Spacer(1, 6 * mm))
     story.append(Paragraph(safe_get(summary, 'action_principle'), styles['highlight']))
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_disclaimer(story, styles):
@@ -534,6 +685,29 @@ def build_disclaimer(story, styles):
 
 
 # ============================================================
+# 页眉页脚
+# ============================================================
+def header_footer(canvas, doc):
+    canvas.saveState()
+    width, height = A4
+
+    canvas.setFont(FONT_NORMAL, 8)
+    canvas.setFillColor(COLOR_TEXT_LIGHT)
+    canvas.drawString(20 * mm, height - 12 * mm, '下周一走势分析报告（V9.3-ST场景推演）')
+    canvas.drawRightString(width - 20 * mm, height - 12 * mm,
+                           datetime.now().strftime('%Y-%m-%d'))
+    canvas.setStrokeColor(COLOR_BORDER)
+    canvas.line(20 * mm, height - 14 * mm, width - 20 * mm, height - 14 * mm)
+
+    canvas.setFont(FONT_NORMAL, 8)
+    canvas.setFillColor(COLOR_TEXT_LIGHT)
+    canvas.drawCentredString(width / 2, 12 * mm, f'第 {doc.page} 页')
+    canvas.line(20 * mm, 15 * mm, width - 20 * mm, 15 * mm)
+
+    canvas.restoreState()
+
+
+# ============================================================
 # 主函数
 # ============================================================
 def generate_report(input_json, output_pdf):
@@ -546,20 +720,15 @@ def generate_report(input_json, output_pdf):
 
     temp_dir = tempfile.mkdtemp(prefix='trend_report_')
 
-    meta = data.get('metadata', {})
-    target_date = safe_get(meta, 'target_date', '')
-    report_title = f'下周一走势分析报告 - {target_date}'
-    report_date = safe_get(meta, 'analysis_date', datetime.now().strftime('%Y-%m-%d'))
-
     doc = SimpleDocTemplate(
         output_pdf,
-        pagesize=PAGE_SIZE,
-        leftMargin=MARGIN_LEFT,
-        rightMargin=MARGIN_RIGHT,
-        topMargin=MARGIN_TOP + 5 * mm,
-        bottomMargin=MARGIN_BOTTOM + 5 * mm,
-        title=report_title,
-        author='量化策略分析系统',
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+        title=f'下周一走势分析报告 - {safe_get(data.get("metadata", {}), "target_date")}',
+        author='quant-rule-analyzer (AI Skill)',
     )
 
     story = []
@@ -574,9 +743,7 @@ def generate_report(input_json, output_pdf):
     build_summary(story, data, styles)
     build_disclaimer(story, styles)
 
-    # 使用共享样式模块的页眉页脚
-    hf = HeaderFooterCanvas(report_title=report_title, report_date=report_date)
-    doc.build(story, onFirstPage=hf, onLaterPages=hf)
+    doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
 
     import shutil
     try:

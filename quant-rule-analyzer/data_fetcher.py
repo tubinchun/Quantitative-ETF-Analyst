@@ -22,15 +22,45 @@ import time
 import hashlib
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
+from contextlib import contextmanager
 
 import pandas as pd
 import numpy as np
+import requests
 
 try:
     import akshare as ak
     AKSHARE_AVAILABLE = True
 except ImportError:
     AKSHARE_AVAILABLE = False
+
+
+# ============================================================
+# 代理绕过工具
+# ============================================================
+def _create_direct_session() -> requests.Session:
+    """创建绕过系统代理的requests session"""
+    session = requests.Session()
+    session.trust_env = False
+    session.proxies = {}
+    return session
+
+
+@contextmanager
+def _bypass_proxy():
+    """临时绕过系统代理的上下文管理器，用于akshare调用"""
+    original_init = requests.Session.__init__
+
+    def patched_init(self):
+        original_init(self)
+        self.trust_env = False
+        self.proxies = {}
+
+    requests.Session.__init__ = patched_init
+    try:
+        yield
+    finally:
+        requests.Session.__init__ = original_init
 
 
 # ============================================================
@@ -215,12 +245,13 @@ class QuantDataFetcher:
             print('警告: akshare 未安装，数据获取功能不可用。请运行: pip install akshare')
 
     def _safe_call(self, func, *args, **kwargs):
-        """安全的API调用，带重试和延迟"""
+        """安全的API调用，带重试和延迟，自动绕过系统代理"""
         max_retries = 3
         for i in range(max_retries):
             try:
-                result = func(*args, **kwargs)
-                time.sleep(0.8)  # 请求间隔，避免被反爬
+                with _bypass_proxy():
+                    result = func(*args, **kwargs)
+                time.sleep(0.8)
                 return result
             except Exception as e:
                 if i < max_retries - 1:
@@ -277,10 +308,9 @@ class QuantDataFetcher:
         return df
 
     def _fetch_kline_sina(self, symbol: str, datalen: int = 90) -> Optional[pd.DataFrame]:
-        """通过新浪财经API获取K线数据（最稳定的数据源）"""
-        import requests
+        """通过新浪财经API获取K线数据（最稳定的数据源，绕过系统代理）"""
+        session = _create_direct_session()
 
-        # 判断市场前缀：5开头是沪市(sz)，1/0开头是深市(sz)
         if symbol.startswith('5'):
             sina_symbol = f'sh{symbol}'
         else:
@@ -289,7 +319,7 @@ class QuantDataFetcher:
         url = 'https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData'
         params = {
             'symbol': sina_symbol,
-            'scale': '240',      # 日K
+            'scale': '240',
             'ma': 'no',
             'datalen': str(datalen),
         }
@@ -299,13 +329,12 @@ class QuantDataFetcher:
         }
 
         try:
-            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            resp = session.get(url, params=params, headers=headers, timeout=15)
             import json as json_lib
             data = json_lib.loads(resp.text)
             if not data:
                 return None
             df = pd.DataFrame(data)
-            # 转换数据类型
             for col in ['open', 'high', 'low', 'close', 'volume']:
                 if col in df.columns:
                     df[col] = df[col].astype(float)
@@ -315,7 +344,7 @@ class QuantDataFetcher:
             return None
 
     def get_etf_latest_quote(self, symbol: str) -> Optional[Dict]:
-        """获取ETF最新净值/行情"""
+        """获取ETF最新净值/行情（同花顺优先，东方财富备用）"""
         if not self.available:
             return None
 
@@ -324,33 +353,71 @@ class QuantDataFetcher:
         if cached:
             return cached
 
-        # 用同花顺接口获取全量ETF数据，再筛选
         df = self._safe_call(ak.fund_etf_spot_ths)
-        if df is None or df.empty:
-            return None
+        if df is not None and not df.empty:
+            row = df[df['基金代码'] == symbol]
+            if not row.empty:
+                record = row.iloc[0].to_dict()
+                result = {
+                    'symbol': symbol,
+                    'name': record.get('基金名称', ''),
+                    'unit_nav': float(record.get('当前-单位净值', 0)),
+                    'accum_nav': float(record.get('当前-累计净值', 0)),
+                    'prev_nav': float(record.get('前一日-单位净值', 0)),
+                    'growth_value': float(record.get('增长值', 0)),
+                    'growth_rate': float(record.get('增长率', 0)),
+                    'latest_trade_date': str(record.get('最新-交易日', '')),
+                    'fund_type': record.get('基金类型', ''),
+                    'query_date': str(record.get('查询日期', '')),
+                }
+                self.cache.set(cache_key, result)
+                return result
 
-        row = df[df['基金代码'] == symbol]
-        if row.empty:
-            return None
+        # 东方财富备用
+        em_data = self._fetch_etf_quote_em(symbol)
+        if em_data:
+            self.cache.set(cache_key, em_data)
+            return em_data
 
-        record = row.iloc[0].to_dict()
-        result = {
-            'symbol': symbol,
-            'name': record.get('基金名称', ''),
-            'unit_nav': float(record.get('当前-单位净值', 0)),
-            'accum_nav': float(record.get('当前-累计净值', 0)),
-            'prev_nav': float(record.get('前一日-单位净值', 0)),
-            'growth_value': float(record.get('增长值', 0)),
-            'growth_rate': float(record.get('增长率', 0)),
-            'latest_trade_date': str(record.get('最新-交易日', '')),
-            'fund_type': record.get('基金类型', ''),
-            'query_date': str(record.get('查询日期', '')),
+        return None
+
+    def _fetch_etf_quote_em(self, symbol: str) -> Optional[Dict]:
+        """通过东方财富API获取单只ETF行情"""
+        session = _create_direct_session()
+        url = 'https://88.push2.eastmoney.com/api/qt/clist/get'
+        params = {
+            'pn': 1, 'pz': 2000, 'po': 1, 'np': 1,
+            'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+            'fltt': 2, 'invt': 2,
+            'wbp2u': '|0|0|0|web',
+            'fid': 'f12',
+            'fs': 'b:MK0021,b:MK0022,b:MK0023,b:MK0024,b:MK0827',
+            'fields': 'f12,f14,f2,f3,f4,f5,f6,f7,f8,f15,f16,f17,f18',
         }
-        self.cache.set(cache_key, result)
-        return result
+        try:
+            resp = session.get(url, params=params, timeout=15)
+            data = resp.json()
+            items = data.get('data', {}).get('diff', [])
+            for item in items:
+                if str(item.get('f12', '')) == symbol:
+                    return {
+                        'symbol': symbol,
+                        'name': item.get('f14', ''),
+                        'unit_nav': item.get('f2', 0),
+                        'growth_rate': item.get('f3', 0),
+                        'growth_value': item.get('f4', 0),
+                        'high': item.get('f15', 0),
+                        'low': item.get('f16', 0),
+                        'open': item.get('f17', 0),
+                        'prev_close': item.get('f18', 0),
+                        'source': 'eastmoney',
+                    }
+        except Exception as e:
+            print(f'  [东方财富单ETF查询失败] {symbol}: {str(e)[:80]}')
+        return None
 
     def get_etf_list(self) -> Optional[pd.DataFrame]:
-        """获取全市场ETF列表"""
+        """获取全市场ETF列表（同花顺优先，东方财富备用）"""
         if not self.available:
             return None
 
@@ -360,10 +427,75 @@ class QuantDataFetcher:
             return pd.DataFrame(cached)
 
         df = self._safe_call(ak.fund_etf_spot_ths)
-        if df is None or df.empty:
+        if df is not None and not df.empty:
+            self.cache.set(cache_key, df.to_dict('records'))
+            return df
+
+        # 东方财富备用
+        print('  同花顺接口不可用，尝试东方财富备用接口...')
+        df = self._fetch_etf_list_em()
+        if df is not None and not df.empty:
+            self.cache.set(cache_key, df.to_dict('records'))
+            return df
+
+        return None
+
+    def _fetch_etf_list_em(self) -> Optional[pd.DataFrame]:
+        """通过东方财富API获取全市场ETF列表"""
+        session = _create_direct_session()
+        all_items = []
+        page_size = 2000
+
+        for page in range(1, 5):
+            url = 'https://88.push2.eastmoney.com/api/qt/clist/get'
+            params = {
+                'pn': page, 'pz': page_size, 'po': 1, 'np': 1,
+                'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+                'fltt': 2, 'invt': 2,
+                'wbp2u': '|0|0|0|web',
+                'fid': 'f12',
+                'fs': 'b:MK0021,b:MK0022,b:MK0023,b:MK0024,b:MK0827',
+                'fields': 'f12,f14,f2,f3,f4,f5,f6,f7,f8,f15,f16,f17,f18',
+            }
+            try:
+                resp = session.get(url, params=params, timeout=15)
+                data = resp.json()
+                items = data.get('data', {}).get('diff', [])
+                if not items:
+                    break
+                all_items.extend(items)
+                total = data.get('data', {}).get('total', 0)
+                if len(all_items) >= total:
+                    break
+                time.sleep(0.5)
+            except Exception as e:
+                print(f'  [东方财富ETF列表第{page}页失败]: {str(e)[:80]}')
+                break
+
+        if not all_items:
             return None
 
-        self.cache.set(cache_key, df.to_dict('records'))
+        records = []
+        for item in all_items:
+            records.append({
+                '基金代码': str(item.get('f12', '')),
+                '基金名称': str(item.get('f14', '')),
+                '当前-单位净值': item.get('f2', 0),
+                '增长率': item.get('f3', 0),
+                '增长值': item.get('f4', 0),
+                '最高': item.get('f15', 0),
+                '最低': item.get('f16', 0),
+                '今开': item.get('f17', 0),
+                '昨收': item.get('f18', 0),
+                '振幅': item.get('f7', 0),
+                '换手率': item.get('f8', 0),
+                '最新-交易日': datetime.now().strftime('%Y-%m-%d'),
+                '基金类型': 'ETF',
+                '查询日期': datetime.now().strftime('%Y-%m-%d'),
+            })
+
+        df = pd.DataFrame(records)
+        print(f'  [东方财富] 获取到 {len(df)} 只ETF')
         return df
 
     # ========================================

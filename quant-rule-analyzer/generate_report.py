@@ -31,46 +31,296 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 
-# 导入共享样式模块
-from report_styles import (
-    register_fonts, get_styles, safe_get, make_para, make_table,
-    make_risk_table, make_info_box, make_section_divider, make_section_banner,
-    make_badge, make_score_bar, make_kpi_card,
-    build_cover_page, build_pdf, setup_matplotlib_style,
-    HeaderFooterCanvas, create_doc,
-    COLOR_PRIMARY, COLOR_PRIMARY_LIGHT, COLOR_PRIMARY_DARK,
-    COLOR_ACCENT, COLOR_ACCENT_LIGHT,
-    COLOR_DANGER, COLOR_WARNING, COLOR_SUCCESS, COLOR_INFO,
-    COLOR_BG_LIGHT, COLOR_BG_TABLE_ALT, COLOR_ACCENT_PALE,
-    COLOR_DANGER_LIGHT, COLOR_WARNING_LIGHT, COLOR_SUCCESS_LIGHT,
-    COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_MUTED, COLOR_WHITE,
-    COLOR_BORDER, COLOR_BORDER_DARK, COLOR_DIVIDER,
-    FONT_NORMAL, FONT_BOLD, FONT_LIGHT,
-    PAGE_SIZE, PAGE_WIDTH, PAGE_HEIGHT,
-    MARGIN_TOP, MARGIN_BOTTOM, MARGIN_LEFT, MARGIN_RIGHT, CONTENT_WIDTH,
-)
+# ============================================================
+# 字体注册（中文支持）
+# ============================================================
+FONT_REGISTERED = False
+FONT_NORMAL = 'Helvetica'
+FONT_BOLD = 'Helvetica-Bold'
 
-# 兼容旧代码中的别名
-COLOR_SECONDARY = COLOR_PRIMARY_LIGHT
-COLOR_GOLD = COLOR_ACCENT
-COLOR_GOLD_LIGHT = COLOR_ACCENT_LIGHT
-COLOR_HIGH_RISK = COLOR_DANGER
-COLOR_MED_RISK = COLOR_WARNING
-COLOR_LOW_RISK = COLOR_SUCCESS
-COLOR_BG_TABLE = COLOR_BG_TABLE_ALT
-COLOR_BG_HIGHLIGHT = COLOR_ACCENT_PALE
-COLOR_BG_RISK_HIGH = COLOR_DANGER_LIGHT
-COLOR_BG_RISK_MED = COLOR_WARNING_LIGHT
-COLOR_BG_RISK_LOW = COLOR_SUCCESS_LIGHT
-COLOR_TEXT_LIGHT = COLOR_TEXT_SECONDARY
-COLOR_ACCENT_RED = COLOR_DANGER  # 旧项目符号中的 COLOR_ACCENT
+def register_fonts():
+    """注册中文字体，优先使用微软雅黑，其次宋体"""
+    global FONT_REGISTERED, FONT_NORMAL, FONT_BOLD
+    if FONT_REGISTERED:
+        return
+
+    font_candidates = [
+        (r'C:\Windows\Fonts\msyh.ttc', 'MSYH', 'MSYH-Bold'),       # 微软雅黑
+        (r'C:\Windows\Fonts\msyhbd.ttc', None, 'MSYH-Bold'),
+        (r'C:\Windows\Fonts\simsun.ttc', 'SimSun', 'SimSun-Bold'),  # 宋体
+        (r'C:\Windows\Fonts\simhei.ttf', 'SimHei', 'SimHei'),       # 黑体
+    ]
+
+    normal_registered = False
+    bold_registered = False
+
+    for path, normal_name, bold_name in font_candidates:
+        if not os.path.exists(path):
+            continue
+        try:
+            if normal_name and not normal_registered:
+                pdfmetrics.registerFont(TTFont(normal_name, path))
+                FONT_NORMAL = normal_name
+                normal_registered = True
+            if bold_name and not bold_registered:
+                if normal_name and path == r'C:\Windows\Fonts\msyh.ttc':
+                    # msyh.ttc 包含多个字重，尝试注册粗体
+                    try:
+                        pdfmetrics.registerFont(TTFont(bold_name, r'C:\Windows\Fonts\msyhbd.ttc'))
+                        FONT_BOLD = bold_name
+                        bold_registered = True
+                    except Exception:
+                        FONT_BOLD = normal_name or FONT_NORMAL
+                elif path == r'C:\Windows\Fonts\simhei.ttf':
+                    pdfmetrics.registerFont(TTFont(bold_name, path))
+                    FONT_BOLD = bold_name
+                    bold_registered = True
+                else:
+                    FONT_BOLD = normal_name or FONT_NORMAL
+                    bold_registered = True
+        except Exception:
+            continue
+
+    if not normal_registered:
+        # 回退：使用 reportlab 内置字体（不支持中文，但不会崩溃）
+        FONT_NORMAL = 'Helvetica'
+        FONT_BOLD = 'Helvetica-Bold'
+
+    if not bold_registered:
+        FONT_BOLD = FONT_NORMAL
+
+    FONT_REGISTERED = True
+
+
+# ============================================================
+# 颜色定义
+# ============================================================
+COLOR_PRIMARY = HexColor('#12324a')      # 深蓝主色
+COLOR_SECONDARY = HexColor('#245e8a')    # 中蓝副色
+COLOR_ACCENT = HexColor('#b63f2f')       # 红色强调
+COLOR_BG_LIGHT = HexColor('#f4f7fb')     # 浅底色
+COLOR_BG_PANEL = HexColor('#ffffff')     # 面板底色
+COLOR_BG_TABLE = HexColor('#f7f9fc')     # 表格交替背景
+COLOR_TEXT = HexColor('#22303c')         # 正文文字
+COLOR_TEXT_LIGHT = HexColor('#637080')   # 辅助文字
+COLOR_BORDER = HexColor('#d8e0ea')       # 边框
+COLOR_HIGH_RISK = HexColor('#c0392b')    # 高风险红
+COLOR_MED_RISK = HexColor('#e67e22')     # 中风险橙
+COLOR_LOW_RISK = HexColor('#1e8449')     # 低风险绿
+COLOR_INFO = HexColor('#2563eb')
+COLOR_SUCCESS = HexColor('#1e8449')
+COLOR_WARN = HexColor('#d97706')
+COLOR_MUTED = HexColor('#8a97a6')
+
+
+# ============================================================
+# 样式定义
+# ============================================================
+def get_styles():
+    """获取段落样式集"""
+    styles = getSampleStyleSheet()
+
+    style_title = ParagraphStyle(
+        'ReportTitle', parent=styles['Title'],
+        fontName=FONT_BOLD, fontSize=24, leading=31,
+        textColor=COLOR_PRIMARY, alignment=TA_CENTER,
+        spaceAfter=8
+    )
+    style_subtitle = ParagraphStyle(
+        'ReportSubtitle', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=12.5, leading=18,
+        textColor=COLOR_TEXT_LIGHT, alignment=TA_CENTER,
+        spaceAfter=6
+    )
+    style_h1 = ParagraphStyle(
+        'SectionH1', parent=styles['Heading1'],
+        fontName=FONT_BOLD, fontSize=15, leading=20,
+        textColor=white, alignment=TA_LEFT,
+        backColor=COLOR_PRIMARY,
+        borderPadding=(8, 10, 8, 10),
+        spaceBefore=16, spaceAfter=10,
+        leftIndent=0
+    )
+    style_h2 = ParagraphStyle(
+        'SectionH2', parent=styles['Heading2'],
+        fontName=FONT_BOLD, fontSize=12, leading=16,
+        textColor=COLOR_PRIMARY, alignment=TA_LEFT,
+        spaceBefore=10, spaceAfter=6,
+        leftIndent=0
+    )
+    style_h3 = ParagraphStyle(
+        'SectionH3', parent=styles['Heading3'],
+        fontName=FONT_BOLD, fontSize=10.5, leading=14,
+        textColor=COLOR_SECONDARY, alignment=TA_LEFT,
+        spaceBefore=6, spaceAfter=4
+    )
+    style_body = ParagraphStyle(
+        'BodyText', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=9.6, leading=15,
+        textColor=COLOR_TEXT, alignment=TA_JUSTIFY,
+        spaceAfter=6
+    )
+    style_bullet = ParagraphStyle(
+        'BulletText', parent=style_body,
+        leftIndent=18, bulletIndent=6, spaceAfter=4
+    )
+    style_table_cell = ParagraphStyle(
+        'TableCell', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=8.2, leading=11.5,
+        textColor=COLOR_TEXT, alignment=TA_LEFT
+    )
+    style_table_header = ParagraphStyle(
+        'TableHeader', parent=styles['Normal'],
+        fontName=FONT_BOLD, fontSize=8.8, leading=11.5,
+        textColor=white, alignment=TA_CENTER
+    )
+    style_table_cell_center = ParagraphStyle(
+        'TableCellCenter', parent=style_table_cell,
+        alignment=TA_CENTER
+    )
+    style_disclaimer = ParagraphStyle(
+        'Disclaimer', parent=style_body,
+        fontSize=8.2, leading=12.5, textColor=COLOR_TEXT_LIGHT,
+        leftIndent=10, rightIndent=10
+    )
+    style_formula = ParagraphStyle(
+        'Formula', parent=style_body,
+        fontName='Courier', fontSize=9, leading=13,
+        textColor=COLOR_PRIMARY, alignment=TA_LEFT,
+        backColor=COLOR_BG_LIGHT, borderPadding=(7, 8, 7, 8),
+        spaceBefore=6, spaceAfter=8
+    )
+    style_kpi_label = ParagraphStyle(
+        'KpiLabel', parent=styles['Normal'],
+        fontName=FONT_BOLD, fontSize=8.4, leading=10.5,
+        textColor=COLOR_MUTED, alignment=TA_CENTER
+    )
+    style_kpi_value = ParagraphStyle(
+        'KpiValue', parent=styles['Normal'],
+        fontName=FONT_BOLD, fontSize=13, leading=16,
+        textColor=COLOR_PRIMARY, alignment=TA_CENTER
+    )
+    style_kpi_note = ParagraphStyle(
+        'KpiNote', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=7.8, leading=10,
+        textColor=COLOR_TEXT_LIGHT, alignment=TA_CENTER
+    )
+
+    return {
+        'title': style_title,
+        'subtitle': style_subtitle,
+        'h1': style_h1,
+        'h2': style_h2,
+        'h3': style_h3,
+        'body': style_body,
+        'bullet': style_bullet,
+        'cell': style_table_cell,
+        'cell_center': style_table_cell_center,
+        'header': style_table_header,
+        'disclaimer': style_disclaimer,
+        'formula': style_formula,
+        'kpi_label': style_kpi_label,
+        'kpi_value': style_kpi_value,
+        'kpi_note': style_kpi_note,
+    }
+
+
+# ============================================================
+# 辅助函数
+# ============================================================
+def safe_get(data, key, default='—'):
+    """安全获取字典值"""
+    val = data.get(key, default) if isinstance(data, dict) else default
+    if val is None or val == '':
+        return default
+    return val
+
+
+def make_para(text, style_key='cell', styles=None):
+    """创建段落，自动处理None和空值"""
+    if styles is None:
+        return Paragraph(str(text), get_styles()['cell'])
+    text = str(text) if text is not None else '—'
+    return Paragraph(text, styles[style_key])
+
+
+def make_table(data, col_widths, styles, header_color=COLOR_PRIMARY):
+    """创建带样式的表格"""
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    style_cmds = [
+        # 表头
+        ('BACKGROUND', (0, 0), (-1, 0), header_color),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        # 正文
+        ('FONTNAME', (0, 1), (-1, -1), FONT_NORMAL),
+        ('FONTSIZE', (0, 1), (-1, -1), 8.5),
+        ('TEXTCOLOR', (0, 1), (-1, -1), COLOR_TEXT),
+        # 边框
+        ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.2, COLOR_PRIMARY),
+        # 内边距
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]
+    # 交替行背景
+    for i in range(1, len(data)):
+        if i % 2 == 0:
+            style_cmds.append(('BACKGROUND', (0, i), (-1, i), COLOR_BG_TABLE))
+    table.setStyle(TableStyle(style_cmds))
+    return table
+
+
+def make_section_rule(width=170 * mm, color=COLOR_BORDER):
+    line_table = Table([['']], colWidths=[width])
+    line_table.setStyle(TableStyle([
+        ('LINEBELOW', (0, 0), (-1, -1), 1.1, color),
+    ]))
+    return line_table
+
+
+def make_panel(title, value, note='', color=COLOR_PRIMARY, title_style=None, value_style=None, note_style=None):
+    title_style = title_style or get_styles()['kpi_label']
+    value_style = value_style or get_styles()['kpi_value']
+    note_style = note_style or get_styles()['kpi_note']
+    cell = Table(
+        [[Paragraph(title, title_style)],
+         [Paragraph(str(value), value_style)],
+         [Paragraph(note or ' ', note_style)]],
+        colWidths=[48 * mm]
+    )
+    cell.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), COLOR_BG_PANEL),
+        ('BOX', (0, 0), (-1, -1), 0.9, color),
+        ('INNERGRID', (0, 0), (-1, -1), 0.0, COLOR_BG_PANEL),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    return cell
+
+
+def severity_color(level, default=COLOR_SECONDARY):
+    if str(level) == '高':
+        return COLOR_HIGH_RISK
+    if str(level) == '中':
+        return COLOR_MED_RISK
+    if str(level) == '低':
+        return COLOR_LOW_RISK
+    return default
 
 
 # ============================================================
 # 流程图生成
 # ============================================================
 def generate_flowchart(logic_flow, model_name, output_path):
-    """使用 matplotlib 生成决策流程图（v2.0 配色：优化版、增大字体、动态尺寸、中文支持）"""
+    """使用 matplotlib 生成决策流程图（优化版：增大字体、动态尺寸、中文支持）"""
     if not logic_flow:
         return None
 
@@ -121,7 +371,7 @@ def generate_flowchart(logic_flow, model_name, output_path):
     ax.set_xlim(0, fig_width)
     ax.set_ylim(0, n_steps + 2)
     ax.axis('off')
-    ax.set_facecolor('#F8FAFC')
+    ax.set_facecolor('white')
     fig.patch.set_facecolor('white')
 
     # 增大盒子尺寸和字体
@@ -130,21 +380,21 @@ def generate_flowchart(logic_flow, model_name, output_path):
     x_center = fig_width / 2
     y_start = n_steps + 1.0
 
-    colors = ['#2C4A7C', '#1B2D4E', '#2980B9', '#2D8B7A', '#2C4A7C',
-              '#1B2D4E', '#2980B9', '#2D8B7A', '#C0392B', '#E67E22']
+    colors = ['#2e86c1', '#1a5276', '#2874a6', '#2471a3', '#2e86c1',
+              '#1a5276', '#2874a6', '#2471a3', '#c0392b', '#e74c3c']
 
     for i, step in enumerate(logic_flow):
         y = y_start - i - 0.6
         color = colors[i % len(colors)]
         is_alert = '暴雨' in str(step.get('action', '')) or '极端' in str(step.get('output', ''))
         if is_alert:
-            color = '#C0392B'
+            color = '#c0392b'
 
         # 绘制圆角矩形
         box = FancyBboxPatch(
             (x_center - box_w / 2, y - box_h / 2), box_w, box_h,
             boxstyle="round,pad=0.12",
-            facecolor=color, edgecolor=COLOR_PRIMARY_DARK, linewidth=1.5,
+            facecolor=color, edgecolor='#1a5276', linewidth=1.5,
             alpha=0.92
         )
         ax.add_patch(box)
@@ -196,7 +446,7 @@ def generate_flowchart(logic_flow, model_name, output_path):
                 (x_center, y - box_h / 2 - 0.02),
                 (x_center, y - 0.98 + box_h / 2 + 0.02),
                 arrowstyle='->,head_width=0.35,head_length=0.25',
-                color=COLOR_TEXT_SECONDARY, linewidth=2.0,
+                color='#566573', linewidth=2.0,
                 mutation_scale=1.5
             )
             ax.add_patch(arrow)
@@ -204,7 +454,7 @@ def generate_flowchart(logic_flow, model_name, output_path):
     # 标题 - 增大字号
     ax.text(x_center, y_start + 0.6, f'{model_name} 决策流程',
             ha='center', va='center', fontsize=16, fontweight='bold',
-            color=COLOR_PRIMARY)
+            color='#1a5276')
 
     plt.tight_layout(pad=2.0)
     plt.savefig(output_path, dpi=150, bbox_inches='tight',
@@ -234,6 +484,57 @@ def generate_flowchart(logic_flow, model_name, output_path):
 # ============================================================
 # 各章节构建函数
 # ============================================================
+def build_cover(story, data, styles):
+    """封面页"""
+    meta = data.get('metadata', {})
+    story.append(Spacer(1, 34 * mm))
+    story.append(Paragraph('量化交易规则', styles['subtitle']))
+    story.append(Spacer(1, 2 * mm))
+    story.append(Paragraph('结构化分析报告', styles['title']))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph(
+        safe_get(meta, 'model_name', '模型') + ' 规则解构与评估',
+        styles['subtitle']
+    ))
+    story.append(Spacer(1, 10 * mm))
+    story.append(make_section_rule(width=135 * mm, color=COLOR_PRIMARY))
+    story.append(Spacer(1, 12 * mm))
+
+    meta_panels = [
+        make_panel('模型版本', safe_get(meta, 'model_version'), '版本标识', COLOR_INFO, styles['kpi_label'], styles['kpi_value'], styles['kpi_note']),
+        make_panel('模型类型', safe_get(meta, 'model_type'), '策略定位', COLOR_SECONDARY, styles['kpi_label'], styles['kpi_value'], styles['kpi_note']),
+        make_panel('持有周期', safe_get(meta, 'holding_period'), '执行周期', COLOR_SUCCESS, styles['kpi_label'], styles['kpi_value'], styles['kpi_note']),
+        make_panel('目标收益', safe_get(meta, 'target_return'), '收益目标', COLOR_WARN, styles['kpi_label'], styles['kpi_value'], styles['kpi_note']),
+    ]
+    panel_table = Table([meta_panels[:2], meta_panels[2:]], colWidths=[48 * mm, 48 * mm], rowHeights=[32 * mm, 32 * mm])
+    panel_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    story.append(panel_table)
+    story.append(Spacer(1, 6 * mm))
+
+    summary_info = [
+        ['文件名', safe_get(meta, 'file_name')],
+        ['分析日期', datetime.now().strftime('%Y-%m-%d')],
+        ['分析工具', 'quant-rule-analyzer (AI Skill)'],
+    ]
+    story.append(make_table(
+        [['字段', '内容']] + [[make_para(k, 'cell', styles), make_para(v, 'cell', styles)] for k, v in summary_info],
+        [34 * mm, 136 * mm], styles
+    ))
+    story.append(Spacer(1, 10 * mm))
+    story.append(Paragraph(
+        '本报告将交易规则拆解为七个维度，并优先突出策略定位、评分阈值、风险暴露与优化方向，'
+        '方便快速判断模型是否具备可执行性、完整性和可扩展性。',
+        styles['subtitle']
+    ))
+    story.append(PageBreak())
+
+
 def build_metadata(story, data, styles):
     """维度1：文件基本信息"""
     meta = data.get('metadata', {})
@@ -252,9 +553,12 @@ def build_metadata(story, data, styles):
     table_data = [['字段', '内容']] + [
         [make_para(k, 'cell', styles), make_para(v, 'cell', styles)] for k, v in info_rows
     ]
-    story.append(make_table(table_data, [40 * mm, 130 * mm], styles))
-    story.append(Spacer(1, 6 * mm))
-    story.append(make_section_divider())
+    story.append(make_table(table_data, [42 * mm, 128 * mm], styles))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph(
+        '这一部分先给出规则文件的身份信息，后续章节会围绕这些元数据展开交易逻辑、参数、风险与优化判断。',
+        styles['body']
+    ))
 
 
 def build_strategy_overview(story, data, styles):
@@ -263,11 +567,11 @@ def build_strategy_overview(story, data, styles):
     story.append(Paragraph('二、核心交易策略概述', styles['h1']))
 
     # 模型定位
-    story.append(make_section_banner('2.1 模型定位', styles))
+    story.append(Paragraph('2.1 模型定位', styles['h2']))
     story.append(Paragraph(safe_get(overview, 'positioning'), styles['body']))
 
     # 核心因子体系
-    story.append(make_section_banner('2.2 核心因子体系', styles))
+    story.append(Paragraph('2.2 核心因子体系', styles['h2']))
     factors = overview.get('core_factors', [])
     if factors:
         factor_data = [['维度/因子', '权重', '说明']]
@@ -282,15 +586,15 @@ def build_strategy_overview(story, data, styles):
         story.append(Paragraph('文档未提及核心因子体系。', styles['body']))
 
     # 评分公式
-    story.append(make_section_banner('2.3 评分公式', styles, color=COLOR_ACCENT))
+    story.append(Paragraph('2.3 评分公式', styles['h2']))
     formula = safe_get(overview, 'scoring_formula')
     if formula and formula != '—':
-        story.append(make_info_box(formula, styles, box_color=COLOR_ACCENT))
+        story.append(Paragraph(formula, styles['formula']))
     else:
         story.append(Paragraph('文档未提及评分公式。', styles['body']))
 
     # 决策阈值
-    story.append(make_section_banner('2.4 决策阈值', styles))
+    story.append(Paragraph('2.4 决策阈值', styles['h2']))
     thresholds = overview.get('decision_thresholds', [])
     if thresholds:
         th_data = [['阈值条件', '对应操作']]
@@ -304,16 +608,13 @@ def build_strategy_overview(story, data, styles):
         story.append(Paragraph('文档未提及决策阈值。', styles['body']))
 
     # 核心交易纪律
-    story.append(make_section_banner('2.5 核心交易纪律', styles))
+    story.append(Paragraph('2.5 核心交易纪律', styles['h2']))
     rules = overview.get('key_rules', [])
     if rules:
-        for rule in rules:
-            story.append(Paragraph(f'• {rule}', styles['bullet']))
+        rule_rows = [[make_para(f'纪律 {i+1}', 'header', styles), make_para(rule, 'cell', styles)] for i, rule in enumerate(rules)]
+        story.append(make_table([['序号', '规则']] + rule_rows, [24 * mm, 146 * mm], styles))
     else:
         story.append(Paragraph('文档未提及核心交易纪律。', styles['body']))
-
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_logic_flow(story, data, styles, temp_dir):
@@ -358,7 +659,7 @@ def build_logic_flow(story, data, styles, temp_dir):
         story.append(Paragraph(f'[流程图生成失败: {e}]', styles['body']))
 
     # 步骤说明表
-    story.append(make_section_banner('3.1 流程步骤说明', styles))
+    story.append(Paragraph('3.1 流程步骤说明', styles['h2']))
     flow_data = [['步骤', '时间', '执行动作', '触发条件', '输出/结果']]
     for step in logic_flow:
         flow_data.append([
@@ -368,10 +669,7 @@ def build_logic_flow(story, data, styles, temp_dir):
             make_para(safe_get(step, 'condition'), 'cell', styles),
             make_para(safe_get(step, 'output'), 'cell', styles),
         ])
-    story.append(make_table(flow_data, [12 * mm, 18 * mm, 45 * mm, 50 * mm, 45 * mm], styles))
-
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
+    story.append(make_table(flow_data, [12 * mm, 18 * mm, 44 * mm, 48 * mm, 48 * mm], styles))
 
 
 def build_key_parameters(story, data, styles):
@@ -389,7 +687,7 @@ def build_key_parameters(story, data, styles):
 
     for key, title in sections:
         items = params.get(key, [])
-        story.append(make_section_banner(title, styles))
+        story.append(Paragraph(title, styles['h2']))
         if items:
             param_data = [['参数名', '取值/规则', '触发条件', '数据来源']]
             for p in items:
@@ -399,13 +697,10 @@ def build_key_parameters(story, data, styles):
                     make_para(safe_get(p, 'condition'), 'cell', styles),
                     make_para(safe_get(p, 'source'), 'cell', styles),
                 ])
-            story.append(make_table(param_data, [35 * mm, 55 * mm, 45 * mm, 35 * mm], styles))
+            story.append(make_table(param_data, [34 * mm, 55 * mm, 48 * mm, 34 * mm], styles))
         else:
             story.append(Paragraph('文档未提及此类参数。', styles['body']))
         story.append(Spacer(1, 4 * mm))
-
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_risk_analysis(story, data, styles):
@@ -416,6 +711,17 @@ def build_risk_analysis(story, data, styles):
     if not risks:
         story.append(Paragraph('未识别到明确的风险点。', styles['body']))
         return
+
+    story.append(Paragraph('5.1 风险总览', styles['h2']))
+    risk_panels = []
+    for level in ['高', '中', '低']:
+        count = sum(1 for r in risks if str(safe_get(r, 'level')) == level)
+        color = severity_color(level)
+        risk_panels.append(make_panel(f'{level}风险', str(count), '条目数', color, styles['kpi_label'], styles['kpi_value'], styles['kpi_note']))
+    risk_summary = Table([risk_panels], colWidths=[53 * mm, 53 * mm, 53 * mm])
+    risk_summary.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    story.append(risk_summary)
+    story.append(Spacer(1, 5 * mm))
 
     risk_data = [['风险描述', '等级', '触发场景', '影响范围']]
     for r in risks:
@@ -464,8 +770,6 @@ def build_risk_analysis(story, data, styles):
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
     ]))
     story.append(legend)
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_effectiveness(story, data, styles):
@@ -474,27 +778,25 @@ def build_effectiveness(story, data, styles):
     story.append(Paragraph('六、规则有效性评估', styles['h1']))
 
     # 优势与不足并排
-    story.append(make_section_banner('6.1 优势与不足', styles))
+    story.append(Paragraph('6.1 优势与不足', styles['h2']))
     strengths = eff.get('strengths', [])
     weaknesses = eff.get('weaknesses', [])
 
     strengths_text = '<br/>'.join([f'• {s}' for s in strengths]) if strengths else '未识别到明确优势'
     weaknesses_text = '<br/>'.join([f'• {w}' for w in weaknesses]) if weaknesses else '未识别到明确不足'
-
     sw_data = [
-        [make_para('优势', 'header', styles), make_para('不足', 'header', styles)],
-        [make_para(strengths_text, 'cell', styles), make_para(weaknesses_text, 'cell', styles)],
+        [Paragraph('优势', styles['header']), Paragraph('不足', styles['header'])],
+        [Paragraph(strengths_text, styles['cell']), Paragraph(weaknesses_text, styles['cell'])],
     ]
     sw_table = Table(sw_data, colWidths=[85 * mm, 85 * mm])
     sw_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, 0), COLOR_SUCCESS),
-        ('BACKGROUND', (1, 0), (1, 0), COLOR_DANGER),
+        ('BACKGROUND', (1, 0), (1, 0), COLOR_ACCENT),
         ('TEXTCOLOR', (0, 0), (-1, 0), white),
         ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+        ('BOX', (0, 0), (-1, -1), 0.8, COLOR_BORDER),
         ('TOPPADDING', (0, 1), (-1, 1), 8),
         ('BOTTOMPADDING', (0, 1), (-1, 1), 8),
         ('LEFTPADDING', (0, 0), (-1, -1), 8),
@@ -504,7 +806,7 @@ def build_effectiveness(story, data, styles):
     story.append(Spacer(1, 6 * mm))
 
     # 评估详情
-    story.append(make_section_banner('6.2 评估详情', styles))
+    story.append(Paragraph('6.2 评估详情', styles['h2']))
     eval_data = [
         ['回测验证状态', safe_get(eff, 'backtesting_status')],
         ['市场环境适应性', safe_get(eff, 'adaptability')],
@@ -514,9 +816,7 @@ def build_effectiveness(story, data, styles):
     eval_table_data = [['评估项', '结果']] + [
         [make_para(k, 'cell', styles), make_para(v, 'cell', styles)] for k, v in eval_data
     ]
-    story.append(make_table(eval_table_data, [40 * mm, 130 * mm], styles))
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
+    story.append(make_table(eval_table_data, [42 * mm, 128 * mm], styles))
 
 
 def build_optimization(story, data, styles):
@@ -528,6 +828,21 @@ def build_optimization(story, data, styles):
         story.append(Paragraph('暂无优化建议。', styles['body']))
         return
 
+    priority_panels = []
+    for level in ['高', '中', '低']:
+        count = sum(1 for s in suggestions if str(safe_get(s, 'priority')) == level)
+        priority_panels.append(make_panel(f'{level}优先', str(count), '建议条数', severity_color(level), styles['kpi_label'], styles['kpi_value'], styles['kpi_note']))
+    priority_table = Table([priority_panels], colWidths=[53 * mm, 53 * mm, 53 * mm])
+    priority_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    story.append(priority_table)
+    story.append(Spacer(1, 5 * mm))
+
     sug_data = [['建议内容', '优先级', '预期效果', '实施难度']]
     for s in suggestions:
         sug_data.append([
@@ -537,7 +852,7 @@ def build_optimization(story, data, styles):
             make_para(safe_get(s, 'difficulty'), 'cell_center', styles),
         ])
 
-    table = make_table(sug_data, [65 * mm, 18 * mm, 60 * mm, 27 * mm], styles)
+    table = make_table(sug_data, [63 * mm, 18 * mm, 58 * mm, 29 * mm], styles)
 
     # 优先级颜色标记
     style_cmds = []
@@ -571,6 +886,32 @@ def build_disclaimer(story, styles):
 
 
 # ============================================================
+# 页眉页脚
+# ============================================================
+def header_footer(canvas, doc):
+    """页眉页脚"""
+    canvas.saveState()
+    width, height = A4
+
+    # 页眉
+    canvas.setFont(FONT_NORMAL, 7.8)
+    canvas.setFillColor(COLOR_TEXT_LIGHT)
+    canvas.drawString(20 * mm, height - 12 * mm, '量化交易规则分析报告')
+    canvas.drawRightString(width - 20 * mm, height - 12 * mm,
+                           datetime.now().strftime('%Y-%m-%d'))
+    canvas.setStrokeColor(COLOR_BORDER)
+    canvas.line(20 * mm, height - 14 * mm, width - 20 * mm, height - 14 * mm)
+
+    # 页脚
+    canvas.setFont(FONT_NORMAL, 7.8)
+    canvas.setFillColor(COLOR_TEXT_LIGHT)
+    canvas.drawCentredString(width / 2, 12 * mm, f'第 {doc.page} 页')
+    canvas.line(20 * mm, 15 * mm, width - 20 * mm, 15 * mm)
+
+    canvas.restoreState()
+
+
+# ============================================================
 # 主函数
 # ============================================================
 def generate_report(input_json, output_pdf):
@@ -585,38 +926,22 @@ def generate_report(input_json, output_pdf):
     # 创建临时目录存放流程图
     temp_dir = tempfile.mkdtemp(prefix='quant_report_')
 
-    metadata = data.get('metadata', {})
-    model_name = safe_get(metadata, 'model_name', '量化交易规则')
-    report_title = f'量化交易规则分析报告 - {model_name}'
-    report_date = datetime.now().strftime('%Y-%m-%d')
-
-    # 创建文档（使用共享样式模块的页眉页脚）
+    # 创建文档
     doc = SimpleDocTemplate(
         output_pdf,
-        pagesize=PAGE_SIZE,
-        leftMargin=MARGIN_LEFT,
-        rightMargin=MARGIN_RIGHT,
-        topMargin=MARGIN_TOP + 5 * mm,
-        bottomMargin=MARGIN_BOTTOM + 5 * mm,
-        title=report_title,
-        author='量化策略分析系统',
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+        title=f'量化交易规则分析报告 - {safe_get(data.get("metadata", {}), "model_name")}',
+        author='quant-rule-analyzer (AI Skill)',
     )
 
     story = []
 
-    # 构建封面页（使用共享样式模块的封面构建器）
-    build_cover_page(story, styles,
-                     title=f'{model_name} 分析报告',
-                     subtitle='量化交易规则结构化分析',
-                     info_items=[
-                         {'label': '模型名称', 'value': model_name},
-                         {'label': '模型版本', 'value': safe_get(metadata, 'model_version')},
-                         {'label': '模型类型', 'value': safe_get(metadata, 'model_type')},
-                         {'label': '分析日期', 'value': report_date},
-                         {'label': '分析框架', 'value': '七维结构化分析'},
-                     ])
-
     # 构建各章节
+    build_cover(story, data, styles)
     build_metadata(story, data, styles)
     build_strategy_overview(story, data, styles)
     build_logic_flow(story, data, styles, temp_dir)
@@ -626,9 +951,8 @@ def generate_report(input_json, output_pdf):
     build_optimization(story, data, styles)
     build_disclaimer(story, styles)
 
-    # 构建 PDF（使用共享样式模块的页眉页脚）
-    hf = HeaderFooterCanvas(report_title=report_title, report_date=report_date)
-    doc.build(story, onFirstPage=hf, onLaterPages=hf)
+    # 构建 PDF
+    doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
 
     # 清理临时文件
     import shutil

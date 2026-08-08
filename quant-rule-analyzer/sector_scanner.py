@@ -39,100 +39,56 @@ from data_fetcher import QuantDataFetcher, TechnicalIndicator
 
 # ============================================================
 # 板块分类映射表（按优先级排序，避免重叠）
-# 覆盖全市场ETF的所有主要板块分类
 # ============================================================
 SECTOR_KEYWORD_MAP = [
-    # ---- 科技类 ----
+    # 科技类
     {'sector': '机器人', 'keywords': ['机器人'], 'etf_codes': ['159770', '560770', '159039']},
-    {'sector': '人工智能', 'keywords': ['人工智能', 'AI', '智算', '算力'], 'etf_codes': []},
-    {'sector': '半导体', 'keywords': ['半导体', '芯片', '集成电路'], 'etf_codes': ['512480', '159995']},
-    {'sector': '通信', 'keywords': ['通信', '5G', '6G', '卫星'], 'etf_codes': []},
-    {'sector': '计算机', 'keywords': ['计算机', '软件', '云计算', '大数据', '信息技术', '信创', '信息安全'], 'etf_codes': []},
+    {'sector': '人工智能', 'keywords': ['人工智能', 'AI', '智算'], 'etf_codes': []},
+    {'sector': '半导体', 'keywords': ['半导体', '芯片'], 'etf_codes': ['512480', '159995']},
     {'sector': '科技', 'keywords': ['科技'], 'etf_codes': []},
-    {'sector': '电子', 'keywords': ['电子', '消费电子'], 'etf_codes': []},
-    {'sector': '物联网', 'keywords': ['物联网'], 'etf_codes': []},
-    {'sector': '智能制造', 'keywords': ['智能制造', '机床', '工业4.0', '高端制造'], 'etf_codes': []},
-    # ---- 医药类 ----
+    {'sector': '通信', 'keywords': ['通信', '5G'], 'etf_codes': []},
+    {'sector': '计算机', 'keywords': ['计算机', '软件', '云计算'], 'etf_codes': []},
+    # 医药类
     {'sector': '创新药', 'keywords': ['创新药'], 'etf_codes': ['159992']},
-    {'sector': '生物医药', 'keywords': ['生物医药', '生物科技'], 'etf_codes': []},
-    {'sector': '医药', 'keywords': ['医药', '医疗', 'CXO', '基因'], 'etf_codes': ['512010']},
-    {'sector': '中药', 'keywords': ['中药', '中医药'], 'etf_codes': []},
-    # ---- 消费类 ----
+    {'sector': '医药', 'keywords': ['医药', '医疗', '生物'], 'etf_codes': ['512010']},
+    # 消费类
     {'sector': '白酒', 'keywords': ['酒'], 'etf_codes': ['515170', '512690']},
-    {'sector': '食品饮料', 'keywords': ['食品', '饮料', '乳业'], 'etf_codes': ['515710']},
+    {'sector': '食品饮料', 'keywords': ['食品', '饮料'], 'etf_codes': ['515710']},
     {'sector': '消费', 'keywords': ['消费'], 'etf_codes': []},
-    {'sector': '家电', 'keywords': ['家电', '白色家电'], 'etf_codes': []},
-    {'sector': '旅游', 'keywords': ['旅游', '出行', '酒店'], 'etf_codes': []},
-    {'sector': '服装', 'keywords': ['服装', '纺织'], 'etf_codes': []},
-    {'sector': '商业贸易', 'keywords': ['商业', '贸易', '零售'], 'etf_codes': []},
-    # ---- 新能源类 ----
+    {'sector': '家电', 'keywords': ['家电'], 'etf_codes': []},
+    {'sector': '旅游', 'keywords': ['旅游', '出行'], 'etf_codes': []},
+    # 新能源类
     {'sector': '光伏', 'keywords': ['光伏'], 'etf_codes': ['515790']},
-    {'sector': '新能源', 'keywords': ['新能源', '碳中和'], 'etf_codes': ['516160']},
-    {'sector': '新能源车', 'keywords': ['汽车', '车联网', '智能车', '新能源车'], 'etf_codes': []},
-    {'sector': '电池', 'keywords': ['电池', '锂电池', '储能'], 'etf_codes': []},
-    {'sector': '风电', 'keywords': ['风电', '风力'], 'etf_codes': []},
-    {'sector': '氢能', 'keywords': ['氢能', '氢气'], 'etf_codes': []},
-    # ---- 金融类 ----
+    {'sector': '新能源', 'keywords': ['新能源'], 'etf_codes': ['516160']},
+    {'sector': '新能源车', 'keywords': ['汽车', '车联网', '智能车'], 'etf_codes': []},
+    {'sector': '电池', 'keywords': ['电池', '锂电池'], 'etf_codes': []},
+    # 金融类
     {'sector': '银行', 'keywords': ['银行'], 'etf_codes': ['512800']},
     {'sector': '证券', 'keywords': ['证券', '券商'], 'etf_codes': []},
-    {'sector': '保险', 'keywords': ['保险'], 'etf_codes': []},
     {'sector': '金融', 'keywords': ['金融'], 'etf_codes': []},
-    # ---- 周期/资源类 ----
+    # 周期类
     {'sector': '军工', 'keywords': ['军工', '国防'], 'etf_codes': ['512660']},
     {'sector': '黄金', 'keywords': ['黄金'], 'etf_codes': ['518880']},
-    {'sector': '有色金属', 'keywords': ['有色', '金属', '铜', '铝', '稀土'], 'etf_codes': []},
-    {'sector': '煤炭', 'keywords': ['煤炭'], 'etf_codes': []},
+    {'sector': '有色金属', 'keywords': ['有色', '金属'], 'etf_codes': []},
+    {'sector': '煤炭', 'keywords': ['煤炭', '能源'], 'etf_codes': []},
     {'sector': '钢铁', 'keywords': ['钢铁'], 'etf_codes': []},
-    {'sector': '石油石化', 'keywords': ['石油', '石化', '油气'], 'etf_codes': []},
     {'sector': '电力', 'keywords': ['电力'], 'etf_codes': []},
-    {'sector': '基建', 'keywords': ['基建', '工程', '建筑', '建材'], 'etf_codes': []},
+    {'sector': '基建', 'keywords': ['基建', '工程'], 'etf_codes': []},
     {'sector': '房地产', 'keywords': ['房地产', '地产'], 'etf_codes': []},
-    {'sector': '化工', 'keywords': ['化工', '化学'], 'etf_codes': []},
-    {'sector': '机械设备', 'keywords': ['机械', '设备', '工业'], 'etf_codes': []},
-    # ---- 其他主题 ----
-    {'sector': '央企', 'keywords': ['央企', '国资'], 'etf_codes': []},
+    # 其他
+    {'sector': '央企', 'keywords': ['央企'], 'etf_codes': []},
+    {'sector': '红利', 'keywords': ['红利', '股息'], 'etf_codes': []},
+    {'sector': '环保', 'keywords': ['环保', '低碳'], 'etf_codes': []},
+    {'sector': '传媒', 'keywords': ['传媒', '游戏', '动漫'], 'etf_codes': []},
+    {'sector': '农业', 'keywords': ['农业', '种业'], 'etf_codes': []},
     {'sector': '央企科技', 'keywords': ['央企科技'], 'etf_codes': []},
-    {'sector': '红利', 'keywords': ['红利', '股息', '高息'], 'etf_codes': []},
-    {'sector': '环保', 'keywords': ['环保', '低碳', '绿色'], 'etf_codes': []},
-    {'sector': '传媒', 'keywords': ['传媒', '游戏', '动漫', '影视'], 'etf_codes': []},
-    {'sector': '农业', 'keywords': ['农业', '种业', '养殖', '畜牧'], 'etf_codes': []},
-    {'sector': '食品', 'keywords': ['食品'], 'etf_codes': []},
-    {'sector': '物流', 'keywords': ['物流', '交运', '运输'], 'etf_codes': []},
-    {'sector': '航空', 'keywords': ['航空', '机场'], 'etf_codes': []},
-    {'sector': '海运', 'keywords': ['海运', '港口', '航运'], 'etf_codes': []},
-    {'sector': '教育', 'keywords': ['教育'], 'etf_codes': []},
-    {'sector': '体育', 'keywords': ['体育'], 'etf_codes': []},
-    {'sector': '养老', 'keywords': ['养老'], 'etf_codes': []},
-    {'sector': '一带一路', 'keywords': ['一带一路'], 'etf_codes': []},
-    {'sector': '国企', 'keywords': ['国企'], 'etf_codes': []},
-    {'sector': 'ESG', 'keywords': ['ESG', '可持续发展'], 'etf_codes': []},
-    {'sector': '数字经济', 'keywords': ['数字经济', '数字'], 'etf_codes': []},
-    {'sector': '元宇宙', 'keywords': ['元宇宙', 'VR', 'AR'], 'etf_codes': []},
-    {'sector': '区块链', 'keywords': ['区块链'], 'etf_codes': []},
-    # ---- 宽基指数 ----
+    # 宽基指数
     {'sector': '科创50', 'keywords': ['科创50'], 'etf_codes': ['588000']},
-    {'sector': '科创板', 'keywords': ['科创板', '科创100', '科创200', '科创综合', '科综'], 'etf_codes': []},
     {'sector': '沪深300', 'keywords': ['沪深300'], 'etf_codes': ['510300']},
-    {'sector': '创业板', 'keywords': ['创业板', '创成长', '创精选'], 'etf_codes': ['159915']},
+    {'sector': '创业板', 'keywords': ['创业板'], 'etf_codes': ['159915']},
     {'sector': '中证500', 'keywords': ['中证500'], 'etf_codes': ['510500']},
     {'sector': '中证1000', 'keywords': ['中证1000'], 'etf_codes': []},
-    {'sector': '中证2000', 'keywords': ['中证2000', '2000增强'], 'etf_codes': []},
     {'sector': '上证50', 'keywords': ['上证50'], 'etf_codes': ['510050']},
-    {'sector': '深证', 'keywords': ['深证', '深成'], 'etf_codes': []},
-    {'sector': '北证50', 'keywords': ['北证50', '北交所'], 'etf_codes': []},
-    {'sector': 'MSCI', 'keywords': ['MSCI'], 'etf_codes': []},
-    {'sector': '国证', 'keywords': ['国证'], 'etf_codes': []},
-    # ---- 风格因子 ----
-    {'sector': '成长', 'keywords': ['成长'], 'etf_codes': []},
-    {'sector': '价值', 'keywords': ['价值'], 'etf_codes': []},
-    {'sector': '质量', 'keywords': ['质量'], 'etf_codes': []},
-    {'sector': '低波动', 'keywords': ['低波动', '低波'], 'etf_codes': []},
-    {'sector': '增强策略', 'keywords': ['增强', '指数增强'], 'etf_codes': []},
-    # ---- 跨境/QDII ----
-    {'sector': 'QDII', 'keywords': ['QDII', '纳斯达克', '标普', '日经', '恒生', '德国'], 'etf_codes': []},
-    # ---- 债券/货币 ----
-    {'sector': '债券', 'keywords': ['债券', '国债', '企债', '可转债', '信用债'], 'etf_codes': []},
-    {'sector': '货币', 'keywords': ['货币', '现金'], 'etf_codes': []},
 ]
 
 
@@ -160,11 +116,13 @@ class SectorScanner:
         return df
 
     def classify_etfs_by_sector(self) -> Dict[str, List[Dict]]:
-        """将全市场ETF按板块分类，未匹配的ETF归入"其他"板块"""
+        """将全市场ETF按板块分类（失败时回退到预设ETF代码）"""
         import pandas as pd
         df = self._load_etf_list()
-        if df.empty:
-            return {}
+
+        if df is None or df.empty:
+            print('ETF列表不可用，使用预设ETF代码进行扫描...')
+            return self._classify_from_preset()
 
         name_col = '基金名称'
         code_col = '基金代码'
@@ -197,22 +155,42 @@ class SectorScanner:
 
             sector_etfs[sector_name] = etfs
 
-        # 收集未分类ETF到"其他"板块
-        unmatched = df[~df[code_col].astype(str).isin(matched_codes)]
-        if not unmatched.empty:
-            other_etfs = []
-            for _, row in unmatched.iterrows():
-                code = str(row[code_col])
-                other_etfs.append({
-                    'code': code,
-                    'name': str(row[name_col]),
-                    'nav': float(row.get('当前-单位净值', 0)),
-                    'growth_rate': float(row.get('增长率', 0)),
-                    'trade_date': str(row.get('最新-交易日', '')),
-                })
-            sector_etfs['其他'] = other_etfs
-            print(f'未分类ETF: {len(other_etfs)}只 → 归入"其他"板块')
+        # 补充预设ETF中未被匹配的板块
+        for sector_info in SECTOR_KEYWORD_MAP:
+            sector_name = sector_info['sector']
+            if sector_name not in sector_etfs and sector_info.get('etf_codes'):
+                etfs = []
+                for code in sector_info['etf_codes']:
+                    etfs.append({
+                        'code': code,
+                        'name': self.fetcher.ETF_MAPPING.get(code, code),
+                        'nav': 0,
+                        'growth_rate': 0,
+                        'trade_date': '',
+                    })
+                sector_etfs[sector_name] = etfs
 
+        return sector_etfs
+
+    def _classify_from_preset(self) -> Dict[str, List[Dict]]:
+        """使用预设ETF代码构建板块分类"""
+        sector_etfs = {}
+        for sector_info in SECTOR_KEYWORD_MAP:
+            sector_name = sector_info['sector']
+            etf_codes = sector_info.get('etf_codes', [])
+            if not etf_codes:
+                # 无预设代码的板块跳过
+                continue
+            etfs = []
+            for code in etf_codes:
+                etfs.append({
+                    'code': code,
+                    'name': self.fetcher.ETF_MAPPING.get(code, code),
+                    'nav': 0,
+                    'growth_rate': 0,
+                    'trade_date': '',
+                })
+            sector_etfs[sector_name] = etfs
         return sector_etfs
 
     def select_representative_etfs(self, sector_name: str, etfs: List[Dict], max_count: int = 3) -> List[str]:
@@ -229,12 +207,12 @@ class SectorScanner:
         sorted_etfs = sorted(etfs, key=lambda x: abs(x.get('growth_rate', 0)), reverse=True)
         return [e['code'] for e in sorted_etfs[:max_count]]
 
-    def scan_all_sectors(self, filter_rule=True, max_sectors=None) -> List[Dict]:
+    def scan_all_sectors(self, filter_rule=True, max_sectors=10) -> List[Dict]:
         """全盘扫描所有板块，按V9.3规则筛选
 
         Args:
             filter_rule: 是否按V9.3规则筛选（True=只保留有交易机会的，False=全部）
-            max_sectors: 最大返回板块数（None=不限制，扫描全部板块）
+            max_sectors: 最大返回板块数
         """
         print('=== 开始全盘扫描所有板块 ===')
         sector_etfs = self.classify_etfs_by_sector()
@@ -289,14 +267,12 @@ class SectorScanner:
             }
             results.append(result)
 
-            # 只有当max_sectors明确指定且大于0时才限制数量
-            if max_sectors is not None and max_sectors > 0 and len(results) >= max_sectors:
+            if len(results) >= max_sectors:
                 break
 
-        # 按F90分类和RSI排序：抄底区优先，然后观望区，最后追涨区
-        f90_order = {'抄底区': 0, '观望区': 1, '追涨区': 2}
+        # 按F90分类和RSI排序：抄底区优先
         results.sort(key=lambda x: (
-            f90_order.get(x['f90_classification'], 1),
+            0 if x['f90_classification'] == '抄底区' else 1,
             x['technical'].get('rsi14', 50)
         ))
 
@@ -678,8 +654,8 @@ def main():
     parser = argparse.ArgumentParser(description='板块全盘扫描器')
     parser.add_argument('mode', choices=['scan', 'analyze', 'list'], help='运行模式: scan=全盘扫描, analyze=指定板块, list=列出所有板块')
     parser.add_argument('sectors', nargs='*', help='analyze模式下的板块名称列表')
-    parser.add_argument('--all', action='store_true', help='scan模式: 显示所有板块（不按规则筛选，包含追涨区）')
-    parser.add_argument('--max', type=int, default=0, help='scan模式: 最大返回板块数（0=不限制，扫描全部板块）')
+    parser.add_argument('--all', action='store_true', help='scan模式: 显示所有板块（不按规则筛选）')
+    parser.add_argument('--max', type=int, default=10, help='scan模式: 最大返回板块数')
     parser.add_argument('--report', action='store_true', help='自动生成PDF报告')
     parser.add_argument('--output', type=str, default=None, help='输出JSON文件路径')
 
@@ -696,9 +672,7 @@ def main():
         return
 
     if args.mode == 'scan':
-        # --max 0 表示不限制，扫描全部板块
-        max_sectors = args.max if args.max > 0 else None
-        sectors = scanner.scan_all_sectors(filter_rule=not args.all, max_sectors=max_sectors)
+        sectors = scanner.scan_all_sectors(filter_rule=not args.all, max_sectors=args.max)
     elif args.mode == 'analyze':
         if not args.sectors:
             print('错误: analyze模式需要指定板块名称')

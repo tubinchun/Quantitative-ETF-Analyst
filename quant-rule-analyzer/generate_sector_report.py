@@ -30,61 +30,133 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-# 导入共享样式模块
-from report_styles import (
-    register_fonts, get_styles, safe_get, make_para, make_table,
-    make_risk_table, make_info_box, make_section_divider, make_section_banner,
-    make_badge, make_score_bar, make_kpi_card, make_kpi_row,
-    build_cover_page, build_pdf, setup_matplotlib_style, get_sector_color,
-    HeaderFooterCanvas, create_doc,
-    COLOR_PRIMARY, COLOR_PRIMARY_LIGHT, COLOR_PRIMARY_DARK,
-    COLOR_ACCENT, COLOR_ACCENT_LIGHT,
-    COLOR_DANGER, COLOR_WARNING, COLOR_SUCCESS, COLOR_INFO,
-    COLOR_BG_LIGHT, COLOR_BG_TABLE_ALT, COLOR_ACCENT_PALE,
-    COLOR_DANGER_LIGHT, COLOR_WARNING_LIGHT, COLOR_SUCCESS_LIGHT,
-    COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_MUTED, COLOR_WHITE,
-    COLOR_BORDER, COLOR_BORDER_DARK, COLOR_DIVIDER,
-    COLOR_SECTOR_PALETTE,
-    FONT_NORMAL, FONT_BOLD, FONT_LIGHT,
-    PAGE_SIZE, PAGE_WIDTH, PAGE_HEIGHT,
-    MARGIN_TOP, MARGIN_BOTTOM, MARGIN_LEFT, MARGIN_RIGHT, CONTENT_WIDTH,
-)
+# ============================================================
+# 字体注册
+# ============================================================
+FONT_REGISTERED = False
+FONT_NORMAL = 'Helvetica'
+FONT_BOLD = 'Helvetica-Bold'
 
-# 兼容旧代码中的别名
-COLOR_SECONDARY = COLOR_PRIMARY_LIGHT
-COLOR_GOLD = COLOR_ACCENT
-COLOR_GOLD_LIGHT = COLOR_ACCENT_LIGHT
-COLOR_HIGH = COLOR_DANGER
-COLOR_MED = COLOR_WARNING
-COLOR_LOW = COLOR_SUCCESS
-COLOR_HIGH_RISK = COLOR_DANGER
-COLOR_MED_RISK = COLOR_WARNING
-COLOR_LOW_RISK = COLOR_SUCCESS
-COLOR_BG_HIGHLIGHT = COLOR_ACCENT_PALE
-COLOR_BG_RISK_HIGH = COLOR_DANGER_LIGHT
-COLOR_BG_RISK_MED = COLOR_WARNING_LIGHT
-COLOR_BG_RISK_LOW = COLOR_SUCCESS_LIGHT
-COLOR_TEXT_LIGHT = COLOR_TEXT_SECONDARY
-COLOR_BG_TABLE = COLOR_BG_TABLE_ALT
-COLOR_ACCENT_OLD = COLOR_DANGER  # 旧项目符号中的 COLOR_ACCENT
+def register_fonts():
+    global FONT_REGISTERED, FONT_NORMAL, FONT_BOLD
+    if FONT_REGISTERED:
+        return
+    font_candidates = [
+        (r'C:\Windows\Fonts\msyh.ttc', 'MSYH', 'MSYH-Bold'),
+        (r'C:\Windows\Fonts\msyhbd.ttc', None, 'MSYH-Bold'),
+        (r'C:\Windows\Fonts\simsun.ttc', 'SimSun', 'SimSun-Bold'),
+        (r'C:\Windows\Fonts\simhei.ttf', 'SimHei', 'SimHei'),
+    ]
+    normal_registered = False
+    bold_registered = False
+    for path, normal_name, bold_name in font_candidates:
+        if not os.path.exists(path):
+            continue
+        try:
+            if normal_name and not normal_registered:
+                pdfmetrics.registerFont(TTFont(normal_name, path))
+                FONT_NORMAL = normal_name
+                normal_registered = True
+            if bold_name and not bold_registered:
+                if normal_name and path == r'C:\Windows\Fonts\msyh.ttc':
+                    try:
+                        pdfmetrics.registerFont(TTFont(bold_name, r'C:\Windows\Fonts\msyhbd.ttc'))
+                        FONT_BOLD = bold_name
+                        bold_registered = True
+                    except Exception:
+                        FONT_BOLD = normal_name or FONT_NORMAL
+                elif path == r'C:\Windows\Fonts\simhei.ttf':
+                    pdfmetrics.registerFont(TTFont(bold_name, path))
+                    FONT_BOLD = bold_name
+                    bold_registered = True
+                else:
+                    FONT_BOLD = normal_name or FONT_NORMAL
+                    bold_registered = True
+        except Exception:
+            continue
+    if not normal_registered:
+        FONT_NORMAL = 'Helvetica'
+        FONT_BOLD = 'Helvetica-Bold'
+    if not bold_registered:
+        FONT_BOLD = FONT_NORMAL
+    FONT_REGISTERED = True
+
+
+# ============================================================
+# 颜色定义
+# ============================================================
+COLOR_PRIMARY = HexColor('#1a5276')
+COLOR_SECONDARY = HexColor('#2e86c1')
+COLOR_ACCENT = HexColor('#e74c3c')
+COLOR_BG_LIGHT = HexColor('#ebf5fb')
+COLOR_BG_TABLE = HexColor('#f8f9fa')
+COLOR_TEXT = HexColor('#2c3e50')
+COLOR_TEXT_LIGHT = HexColor('#7f8c8d')
+COLOR_BORDER = HexColor('#bdc3c7')
+COLOR_HIGH = HexColor('#e74c3c')
+COLOR_MED = HexColor('#f39c12')
+COLOR_LOW = HexColor('#27ae60')
 COLOR_SECTOR = {
-    '机器人': COLOR_SECTOR_PALETTE[0],
-    '创新药': COLOR_SECTOR_PALETTE[1],
-    '白酒': COLOR_SECTOR_PALETTE[2],
-    '半导体': COLOR_SECTOR_PALETTE[3],
-    '人工智能': COLOR_SECTOR_PALETTE[4],
-    '科技': COLOR_SECTOR_PALETTE[5],
-    '通信': COLOR_SECTOR_PALETTE[6],
+    '机器人': '#2e86c1',
+    '创新药': '#27ae60',
+    '白酒': '#f39c12',
 }
 
 
 # ============================================================
-# 以下样式/辅助函数由共享模块 report_styles.py 提供：
-#   register_fonts, get_styles, safe_get, make_para, make_table,
-#   make_risk_table, make_info_box, make_section_divider,
-#   build_cover_page, build_pdf, HeaderFooterCanvas 等
-# 本文件仅保留板块报告专用的辅助函数
+# 样式定义
 # ============================================================
+def get_styles():
+    styles = getSampleStyleSheet()
+    style_title = ParagraphStyle('ReportTitle', parent=styles['Title'],
+        fontName=FONT_BOLD, fontSize=24, leading=34, textColor=COLOR_PRIMARY,
+        alignment=TA_CENTER, spaceAfter=10)
+    style_subtitle = ParagraphStyle('ReportSubtitle', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=13, leading=18, textColor=COLOR_TEXT_LIGHT,
+        alignment=TA_CENTER, spaceAfter=6)
+    style_h1 = ParagraphStyle('SectionH1', parent=styles['Heading1'],
+        fontName=FONT_BOLD, fontSize=16, leading=24, textColor=white,
+        alignment=TA_LEFT, backColor=COLOR_PRIMARY, borderPadding=(8, 10, 8, 10),
+        spaceBefore=20, spaceAfter=12, leftIndent=0)
+    style_h2 = ParagraphStyle('SectionH2', parent=styles['Heading2'],
+        fontName=FONT_BOLD, fontSize=12, leading=17, textColor=COLOR_PRIMARY,
+        alignment=TA_LEFT, spaceBefore=12, spaceAfter=6, leftIndent=0)
+    style_h3 = ParagraphStyle('SectionH3', parent=styles['Heading3'],
+        fontName=FONT_BOLD, fontSize=10.5, leading=15, textColor=COLOR_SECONDARY,
+        alignment=TA_LEFT, spaceBefore=8, spaceAfter=4, leftIndent=0)
+    style_body = ParagraphStyle('BodyText', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=10, leading=16, textColor=COLOR_TEXT,
+        alignment=TA_JUSTIFY, spaceAfter=6)
+    style_bullet = ParagraphStyle('BulletText', parent=style_body,
+        leftIndent=18, bulletIndent=6, spaceAfter=4)
+    style_cell = ParagraphStyle('TableCell', parent=styles['Normal'],
+        fontName=FONT_NORMAL, fontSize=8.5, leading=12, textColor=COLOR_TEXT,
+        alignment=TA_LEFT)
+    style_cell_center = ParagraphStyle('TableCellCenter', parent=style_cell,
+        alignment=TA_CENTER)
+    style_header = ParagraphStyle('TableHeader', parent=styles['Normal'],
+        fontName=FONT_BOLD, fontSize=9, leading=12, textColor=white,
+        alignment=TA_CENTER)
+    style_disclaimer = ParagraphStyle('Disclaimer', parent=style_body,
+        fontSize=8.5, leading=13, textColor=COLOR_TEXT_LIGHT,
+        leftIndent=10, rightIndent=10)
+    style_highlight = ParagraphStyle('Highlight', parent=style_body,
+        fontName=FONT_BOLD, fontSize=10.5, leading=16, textColor=COLOR_ACCENT,
+        alignment=TA_CENTER, backColor=HexColor('#fdf2e9'),
+        borderPadding=(8, 10, 8, 10), spaceBefore=6, spaceAfter=10)
+    return {
+        'title': style_title, 'subtitle': style_subtitle, 'h1': style_h1,
+        'h2': style_h2, 'h3': style_h3, 'body': style_body, 'bullet': style_bullet,
+        'cell': style_cell, 'cell_center': style_cell_center, 'header': style_header,
+        'disclaimer': style_disclaimer, 'highlight': style_highlight,
+    }
+
+
+def safe_get(data, key, default='—'):
+    val = data.get(key, default) if isinstance(data, dict) else default
+    if val is None or val == '':
+        return default
+    return val
 
 
 def _is_numeric(val):
@@ -100,15 +172,47 @@ def _is_numeric(val):
     return False
 
 
+def make_para(text, style_key='cell', styles=None):
+    if styles is None:
+        return Paragraph(str(text), get_styles()['cell'])
+    text = str(text) if text is not None else '—'
+    return Paragraph(text, styles[style_key])
+
+
+def make_table(data, col_widths, styles, header_color=COLOR_PRIMARY):
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), header_color),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 1), (-1, -1), FONT_NORMAL),
+        ('FONTSIZE', (0, 1), (-1, -1), 8.5),
+        ('TEXTCOLOR', (0, 1), (-1, -1), COLOR_TEXT),
+        ('GRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.2, COLOR_PRIMARY),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]
+    for i in range(1, len(data)):
+        if i % 2 == 0:
+            style_cmds.append(('BACKGROUND', (0, i), (-1, i), COLOR_BG_TABLE))
+    table.setStyle(TableStyle(style_cmds))
+    return table
+
+
 # ============================================================
 # 雷达图生成
 # ============================================================
 def generate_radar_chart(sectors, output_path):
-    """生成五维评分雷达对比图（v2.0 配色）"""
+    """生成五维评分雷达对比图"""
     if not sectors:
         return None
 
-    setup_matplotlib_style()
     plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'SimSun']
     plt.rcParams['axes.unicode_minus'] = False
 
@@ -128,10 +232,8 @@ def generate_radar_chart(sectors, output_path):
     angles += angles[:1]
 
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-    fig.patch.set_facecolor('#FFFFFF')
-    ax.set_facecolor('#F8FAFC')
 
-    for idx, s in enumerate(sectors):
+    for s in sectors:
         sname = safe_get(s, 'sector_name', '板块')
         scoring = s.get(scoring_key, {})
         values = []
@@ -144,23 +246,20 @@ def generate_radar_chart(sectors, output_path):
                 score = 0
             values.append(score)
         values += values[:1]
-        color = COLOR_SECTOR.get(sname, COLOR_SECTOR_PALETTE[idx % len(COLOR_SECTOR_PALETTE)])
-        ax.plot(angles, values, 'o-', linewidth=2, label=sname, color=color, markersize=5)
-        ax.fill(angles, values, alpha=0.12, color=color)
+        color = COLOR_SECTOR.get(sname, '#2e86c1')
+        ax.plot(angles, values, 'o-', linewidth=2, label=sname, color=color)
+        ax.fill(angles, values, alpha=0.15, color=color)
 
     ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(dimensions, fontsize=10, fontweight='bold', color=COLOR_TEXT)
+    ax.set_xticklabels(dimensions, fontsize=10, fontweight='bold')
     ax.set_ylim(0, 10)
     ax.set_yticks([2, 4, 6, 8, 10])
-    ax.set_yticklabels(['2', '4', '6', '8', '10'], fontsize=8, color=COLOR_TEXT_SECONDARY)
-    ax.set_rlabel_position(30)
+    ax.set_yticklabels(['2', '4', '6', '8', '10'], fontsize=8)
     framework = 'LT六维' if is_lt else 'ST五维'
     ax.set_title(f'{len(sectors)}大板块{framework}评分对比', fontsize=14, fontweight='bold',
-                 color=COLOR_PRIMARY, pad=25)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.1), fontsize=9,
-              frameon=True, facecolor='white', edgecolor=COLOR_BORDER)
-    ax.grid(True, alpha=0.25, color=COLOR_DIVIDER)
-    ax.spines['polar'].set_color(COLOR_BORDER)
+                 color='#1a5276', pad=25)
+    ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.1), fontsize=9)
+    ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight',
@@ -173,11 +272,10 @@ def generate_radar_chart(sectors, output_path):
 # 综合评分柱状图
 # ============================================================
 def generate_score_bar_chart(sectors, output_path):
-    """生成综合评分柱状图（v2.0 配色）"""
+    """生成综合评分柱状图"""
     if not sectors:
         return None
 
-    setup_matplotlib_style()
     plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'SimSun']
     plt.rcParams['axes.unicode_minus'] = False
 
@@ -185,8 +283,8 @@ def generate_score_bar_chart(sectors, output_path):
 
     names = []
     scores = []
-    sector_colors = []
-    for idx, s in enumerate(sectors):
+    colors = []
+    for s in sectors:
         sname = safe_get(s, 'sector_name', '板块')
         if is_lt:
             scoring = s.get('six_dimension_scoring', {})
@@ -200,39 +298,32 @@ def generate_score_bar_chart(sectors, output_path):
             score = 0
         names.append(sname)
         scores.append(score)
-        sector_colors.append(COLOR_SECTOR.get(sname, COLOR_SECTOR_PALETTE[idx % len(COLOR_SECTOR_PALETTE)]))
+        colors.append(COLOR_SECTOR.get(sname, '#2e86c1'))
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    fig.patch.set_facecolor('#FFFFFF')
-    ax.set_facecolor('#F8FAFC')
-    bars = ax.bar(names, scores, color=sector_colors, alpha=0.88, edgecolor=COLOR_PRIMARY,
-                  linewidth=1.0, width=0.5)
+    bars = ax.bar(names, scores, color=colors, alpha=0.85, edgecolor='#1a5276',
+                  linewidth=1.2, width=0.5)
 
     for bar, score in zip(bars, scores):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.15,
                 f'{score:.2f}', ha='center', va='bottom', fontsize=13,
-                fontweight='bold', color=COLOR_PRIMARY)
+                fontweight='bold', color='#1a5276')
 
-    ax.set_ylabel('综合评分', fontsize=11, fontweight='bold', color=COLOR_TEXT)
+    ax.set_ylabel('综合评分', fontsize=11, fontweight='bold')
     title = 'LT六维综合评分对比' if is_lt else 'ST五维综合评分对比'
     ax.set_title(f'{len(sectors)}大板块{title}', fontsize=14, fontweight='bold',
-                 color=COLOR_PRIMARY, pad=15)
+                 color='#1a5276', pad=15)
     ax.set_ylim(0, 10)
     if is_lt:
-        ax.axhline(y=8.5, color=COLOR_SUCCESS, linestyle='--', alpha=0.5, linewidth=1.2, label='强烈推荐(8.5)')
-        ax.axhline(y=7.5, color=COLOR_INFO, linestyle='--', alpha=0.5, linewidth=1.2, label='可配置(7.5)')
-        ax.axhline(y=6.5, color=COLOR_DANGER, linestyle='--', alpha=0.5, linewidth=1.2, label='谨慎参与(6.5)')
+        ax.axhline(y=8.5, color='#27ae60', linestyle='--', alpha=0.6, label='强烈推荐(8.5)')
+        ax.axhline(y=7.5, color='#2980b9', linestyle='--', alpha=0.6, label='可配置(7.5)')
+        ax.axhline(y=6.5, color='#e74c3c', linestyle='--', alpha=0.6, label='谨慎参与(6.5)')
     else:
-        ax.axhline(y=7.5, color=COLOR_SUCCESS, linestyle='--', alpha=0.5, linewidth=1.2, label='推荐线(7.5)')
-        ax.axhline(y=5.0, color=COLOR_DANGER, linestyle='--', alpha=0.5, linewidth=1.2, label='观望线(5.0)')
-    ax.legend(fontsize=9, loc='upper right', frameon=True, facecolor='white', edgecolor=COLOR_BORDER)
-    ax.grid(axis='y', alpha=0.3, color=COLOR_DIVIDER)
+        ax.axhline(y=7.5, color='#27ae60', linestyle='--', alpha=0.6, label='推荐线(7.5)')
+        ax.axhline(y=5.0, color='#e74c3c', linestyle='--', alpha=0.6, label='观望线(5.0)')
+    ax.legend(fontsize=9, loc='upper right')
+    ax.grid(axis='y', alpha=0.3)
     ax.set_axisbelow(True)
-    ax.tick_params(colors=COLOR_TEXT_SECONDARY)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color(COLOR_BORDER)
-    ax.spines['bottom'].set_color(COLOR_BORDER)
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight',
@@ -245,72 +336,65 @@ def generate_score_bar_chart(sectors, output_path):
 # 各章节构建函数
 # ============================================================
 def build_cover(story, data, styles):
-    """封面页（使用共享样式模块的封面构建器）"""
     meta = data.get('metadata', {})
+    story.append(Spacer(1, 45 * mm))
+    story.append(Paragraph('板块分析报告', styles['title']))
+    story.append(Spacer(1, 8 * mm))
+    story.append(Paragraph('基于V9.3-ST五维评分框架', styles['subtitle']))
+    story.append(Spacer(1, 20 * mm))
+
+    line_table = Table([['']], colWidths=[120 * mm])
+    line_table.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, -1), 2, COLOR_PRIMARY)]))
+    story.append(line_table)
+    story.append(Spacer(1, 25 * mm))
+
     sectors = safe_get(meta, 'sectors_analyzed', '—')
     if isinstance(sectors, list):
         sectors_str = '、'.join(sectors)
     else:
         sectors_str = str(sectors)
 
-    build_cover_page(story, styles,
-                     title='板块分析报告',
-                     subtitle=safe_get(meta, 'strategy_used', 'V9.3 双模型板块分析'),
-                     info_items=[
-                         {'label': '分析周期', 'value': safe_get(meta, 'target_period')},
-                         {'label': '分析板块', 'value': sectors_str},
-                         {'label': '分析类型', 'value': safe_get(meta, 'analysis_type')},
-                         {'label': '分析日期', 'value': safe_get(meta, 'analysis_date')},
-                         {'label': '数据来源', 'value': safe_get(meta, 'data_source')},
-                         {'label': '评分公式', 'value': safe_get(meta, 'scoring_formula')},
-                     ])
+    cover_info = [
+        ['分析周期', safe_get(meta, 'target_period')],
+        ['使用策略', safe_get(meta, 'strategy_used')],
+        ['分析板块', sectors_str],
+        ['分析类型', safe_get(meta, 'analysis_type')],
+        ['分析日期', safe_get(meta, 'analysis_date')],
+        ['数据来源', safe_get(meta, 'data_source')],
+        ['评分公式', safe_get(meta, 'scoring_formula')],
+    ]
+    cover_data = [[make_para(k, 'cell', styles), make_para(v, 'cell', styles)] for k, v in cover_info]
+    story.append(make_table([['字段', '内容']] + cover_data, [40 * mm, 100 * mm], styles))
+    story.append(Spacer(1, 25 * mm))
+
+    story.append(Paragraph(
+        '本报告基于V9.3-ST超短线量化交易模型的五维评分框架，'
+        '对机器人、创新药、白酒三大板块进行结构化对比分析，'
+        '输出各板块评分、策略执行决策与下周配置建议。',
+        styles['subtitle']
+    ))
+    story.append(PageBreak())
 
 
 def build_overview(story, data, styles):
     meta = data.get('metadata', {})
     story.append(Paragraph('一、分析概述', styles['h1']))
 
-    # KPI统计卡片行
-    sectors = data.get('sector_analysis', [])
-    total = len(sectors)
-    bottom_fishing = sum(1 for s in sectors if s.get('f90_classification', '') == '抄底区')
-    watch = sum(1 for s in sectors if s.get('f90_classification', '') == '观望区')
-    chase = total - bottom_fishing - watch
-
-    kpi_color = COLOR_PRIMARY if bottom_fishing > 0 else COLOR_PRIMARY_LIGHT
-    cards = [
-        make_kpi_card('板块总数', str(total), f'分析日期: {safe_get(meta, "analysis_date")}',
-                      color=COLOR_PRIMARY, width=50*mm),
-        make_kpi_card('抄底区', str(bottom_fishing), 'RSI<40 负乖离 超卖',
-                      color=COLOR_SUCCESS if bottom_fishing > 0 else COLOR_TEXT_MUTED, width=50*mm),
-        make_kpi_card('观望区', str(watch), '趋势待确认',
-                      color=COLOR_WARNING if watch > 0 else COLOR_TEXT_MUTED, width=50*mm),
-    ]
-    story.append(Table([cards], colWidths=[50*mm, 50*mm, 50*mm]))
-    story.append(Spacer(1, 8 * mm))
-
-    # 分析背景
-    story.append(make_section_banner('1.1 分析背景', styles))
-    sectors_str = '、'.join(safe_get(meta, 'sectors_analyzed', []))
-    strategy_name = safe_get(meta, 'strategy_used', 'V9.3双模型')
+    story.append(Paragraph('1.1 分析背景', styles['h2']))
     story.append(Paragraph(
-        f"本报告针对 <b>{safe_get(meta, 'target_period')}</b> 进行板块分析，"
-        f"基于 <b>{strategy_name}</b> 的五维评分体系"
+        f"本报告针对 {safe_get(meta, 'target_period')} 进行板块分析，"
+        f"基于 {safe_get(meta, 'strategy_used')} 的五维评分体系"
         f"（S1资金面25%+S2宏观面20%+S3产业面20%+S4技术面20%+S5风险面15%），"
-        f"对 <b>{sectors_str}</b> 等板块进行对比评估，"
-        f"结合F90追涨/抄底分类、F73红线安检、F86-V2三阶段确认等策略因子，"
-        f"输出各板块的执行决策与配置建议。",
+        f"对{'、'.join(safe_get(meta, 'sectors_analyzed', []))}三大板块进行对比评估，"
+        "结合F90追涨/抄底分类、F73红线安检、F86-V2三阶段确认等策略因子，"
+        "输出各板块的执行决策与配置建议。",
         styles['body']
     ))
 
-    story.append(make_section_banner('1.2 数据说明', styles))
+    story.append(Paragraph('1.2 数据说明', styles['h2']))
     story.append(Paragraph(safe_get(meta, 'data_source'), styles['body']))
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph(
-        f"<b>重要提示：</b>{safe_get(meta, 'disclaimer', '本报告基于量化模型自动生成，仅供参考，不构成投资建议。')}",
-        styles['highlight']))
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph(f"<b>重要提示：</b>{safe_get(meta, 'disclaimer')}", styles['highlight']))
 
 
 def build_sector_analysis(story, data, styles, temp_dir):
@@ -336,53 +420,33 @@ def build_sector_analysis(story, data, styles, temp_dir):
     # 各板块详细分析（同时展示ST超短线和LT中长期分析）
     for idx, s in enumerate(sectors, 1):
         sname = safe_get(s, 'sector_name', '板块')
+        # 同时读取ST和LT评分数据
         st_scoring = s.get('five_dimension_scoring', {})
         lt_scoring = s.get('six_dimension_scoring', {})
         has_st = bool(st_scoring)
         has_lt = bool(lt_scoring)
-        f90 = s.get('f90_classification', '观望区')
 
+        # ST评分
         st_final_score = safe_get(st_scoring, 'final_score', '—')
         st_af = safe_get(st_scoring, 'af_adjustment', '—')
+        # LT评分
         lt_final_score = safe_get(lt_scoring, 'total_score', '—')
         lt_rating = safe_get(lt_scoring, 'rating', '—')
         lt_position_limit = safe_get(lt_scoring, 'position_limit', '—')
 
-        # 板块标题（使用章节横幅 + 状态徽章）
-        badge_type = 'success' if f90 == '抄底区' else ('warning' if f90 == '观望区' else 'danger')
-        badge_text = f'● {f90}' if f90 else '—'
-        sector_color = COLOR_SECTOR.get(sname,
-            COLOR_SECTOR_PALETTE[(idx - 1) % len(COLOR_SECTOR_PALETTE)])
-        story.append(make_section_banner(f'2.{idx} {sname}', styles, color=sector_color))
-        # 状态徽章
-        badge = make_badge(badge_text, badge_type=badge_type, styles=styles)
-        badge_row = Table([[badge, Spacer(1, 1)]], colWidths=[25*mm, CONTENT_WIDTH - 25*mm])
-        badge_row.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (0, 0), 0),
-        ]))
-        story.append(badge_row)
-        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(f'2.{idx} {sname}', styles['h2']))
 
-        # 板块概览表 + 评分进度条（同时展示ST和LT评分）
+        # 板块概览表（同时展示ST和LT评分）
         story.append(Paragraph(f'<b>2.{idx}.1 板块概览</b>', styles['h3']))
         overview_data = [['指标', '数值']]
         overview_data.append([make_para('代表ETF', 'cell', styles),
                               make_para(", ".join(safe_get(s, "representative_etfs", [])), 'cell', styles)])
         if has_st:
-            try:
-                st_score_val = float(st_final_score)
-            except (ValueError, TypeError):
-                st_score_val = 0
             overview_data.append([make_para('ST综合评分', 'cell_center', styles),
                                   make_para(str(st_final_score), 'cell_center', styles)])
             overview_data.append([make_para('ST AF调整', 'cell_center', styles),
                                   make_para(str(st_af), 'cell_center', styles)])
         if has_lt:
-            try:
-                lt_score_val = float(lt_final_score)
-            except (ValueError, TypeError):
-                lt_score_val = 0
             overview_data.append([make_para('LT综合评分', 'cell_center', styles),
                                   make_para(str(lt_final_score), 'cell_center', styles)])
             overview_data.append([make_para('LT评级', 'cell_center', styles),
@@ -390,12 +454,6 @@ def build_sector_analysis(story, data, styles, temp_dir):
             overview_data.append([make_para('LT仓位上限', 'cell_center', styles),
                                   make_para(str(lt_position_limit), 'cell_center', styles)])
         story.append(make_table(overview_data, [35 * mm, 110 * mm], styles))
-        story.append(Spacer(1, 2 * mm))
-
-        # 评分可视化进度条
-        if has_st and st_score_val > 0:
-            story.append(make_score_bar(st_score_val, max_score=10, width=CONTENT_WIDTH,
-                         color=COLOR_SUCCESS if st_score_val >= 7 else (COLOR_WARNING if st_score_val >= 5 else COLOR_DANGER)))
         story.append(Spacer(1, 3 * mm))
 
         # 市场背景详析（合并ST和LT关注的维度）
@@ -519,8 +577,6 @@ def build_sector_analysis(story, data, styles, temp_dir):
 
         story.append(Spacer(1, 8 * mm))
 
-    story.append(make_section_divider())
-
 
 def build_comparison(story, data, styles, temp_dir):
     matrix = data.get('comparison_matrix', [])
@@ -610,9 +666,6 @@ def build_comparison(story, data, styles, temp_dir):
             dim_w = remain / max(len(text_dims), 1)
             col_widths2 = [sector_w] + [dim_w] * len(text_dims)
             story.append(make_table(comp_data2, col_widths2, styles))
-
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_next_week_strategy(story, data, styles):
@@ -705,9 +758,6 @@ def build_next_week_strategy(story, data, styles):
             ])
         story.append(make_table(sl_data, [30 * mm, 45 * mm, 45 * mm, 45 * mm], styles))
 
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
-
 
 def build_risk_alerts(story, data, styles):
     risks = data.get('risk_alerts', [])
@@ -741,8 +791,6 @@ def build_risk_alerts(story, data, styles):
     if style_cmds:
         table.setStyle(TableStyle(style_cmds))
     story.append(table)
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_summary(story, data, styles):
@@ -776,8 +824,6 @@ def build_summary(story, data, styles):
 
     story.append(Spacer(1, 6 * mm))
     story.append(Paragraph(safe_get(summary, 'action_principle'), styles['highlight']))
-    story.append(Spacer(1, 4 * mm))
-    story.append(make_section_divider())
 
 
 def build_disclaimer(story, styles):
@@ -794,6 +840,23 @@ def build_disclaimer(story, styles):
     story.append(Paragraph(disclaimer_text, styles['disclaimer']))
 
 
+def header_footer(canvas, doc):
+    canvas.saveState()
+    width, height = A4
+    canvas.setFont(FONT_NORMAL, 8)
+    canvas.setFillColor(COLOR_TEXT_LIGHT)
+    canvas.drawString(20 * mm, height - 12 * mm, '板块分析报告（V9.3-ST五维评分）')
+    canvas.drawRightString(width - 20 * mm, height - 12 * mm,
+                           datetime.now().strftime('%Y-%m-%d'))
+    canvas.setStrokeColor(COLOR_BORDER)
+    canvas.line(20 * mm, height - 14 * mm, width - 20 * mm, height - 14 * mm)
+    canvas.setFont(FONT_NORMAL, 8)
+    canvas.setFillColor(COLOR_TEXT_LIGHT)
+    canvas.drawCentredString(width / 2, 12 * mm, f'第 {doc.page} 页')
+    canvas.line(20 * mm, 15 * mm, width - 20 * mm, 15 * mm)
+    canvas.restoreState()
+
+
 def generate_report(input_json, output_pdf):
     register_fonts()
     styles = get_styles()
@@ -803,21 +866,12 @@ def generate_report(input_json, output_pdf):
 
     temp_dir = tempfile.mkdtemp(prefix='sector_report_')
 
-    meta = data.get('metadata', {})
-    sectors = safe_get(meta, 'sectors_analyzed', [])
-    if isinstance(sectors, list):
-        sectors_str = '、'.join(sectors)
-    else:
-        sectors_str = str(sectors)
-    report_title = f'板块分析报告 - {sectors_str}'
-    report_date = safe_get(meta, 'analysis_date', datetime.now().strftime('%Y-%m-%d'))
-
     doc = SimpleDocTemplate(
-        output_pdf, pagesize=PAGE_SIZE,
-        leftMargin=MARGIN_LEFT, rightMargin=MARGIN_RIGHT,
-        topMargin=MARGIN_TOP + 5 * mm, bottomMargin=MARGIN_BOTTOM + 5 * mm,
-        title=report_title,
-        author='量化策略分析系统',
+        output_pdf, pagesize=A4,
+        leftMargin=20 * mm, rightMargin=20 * mm,
+        topMargin=20 * mm, bottomMargin=20 * mm,
+        title='板块分析报告 - 三大板块五维评分',
+        author='quant-rule-analyzer (AI Skill)',
     )
 
     story = []
@@ -830,9 +884,7 @@ def generate_report(input_json, output_pdf):
     build_summary(story, data, styles)
     build_disclaimer(story, styles)
 
-    # 使用共享样式模块的页眉页脚
-    hf = HeaderFooterCanvas(report_title=report_title, report_date=report_date)
-    doc.build(story, onFirstPage=hf, onLaterPages=hf)
+    doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
 
     import shutil
     try:

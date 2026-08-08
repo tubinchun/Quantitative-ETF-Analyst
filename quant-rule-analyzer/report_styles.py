@@ -564,7 +564,7 @@ def make_score_bar(score, max_score=10, width=80*mm, height=5*mm,
 
     label_text = f'{score}/{max_score}' if show_label else ''
 
-    # 使用两个嵌套表格模拟进度条
+    # 使用两个嵌套表格模拟进度条（确保不超出内容区）
     bar_data = [['']]
     bar = Table(bar_data, colWidths=[width], rowHeights=[height])
     bar.setStyle(TableStyle([
@@ -576,7 +576,9 @@ def make_score_bar(score, max_score=10, width=80*mm, height=5*mm,
     if show_label:
         label = Paragraph(label_text, ParagraphStyle('BarLabel', parent=styles['body'],
             fontSize=7.5, leading=9, textColor=COLOR_TEXT_SECONDARY, alignment=TA_RIGHT))
-        return Table([[bar, label]], colWidths=[width, 20*mm])
+        # 总宽度限制在 CONTENT_WIDTH 内，避免溢出导致遮挡
+        label_col = min(22 * mm, max(16 * mm, CONTENT_WIDTH - width))
+        return Table([[bar, label]], colWidths=[width, label_col])
 
     return bar
 
@@ -726,54 +728,54 @@ class CoverBackground(Flowable):
 
     def draw(self):
         c = self.canv
-        # 主背景：深蓝
+        # 主背景：深蓝（铺满整个页面画布，不使用负坐标偏移，避免被 ReportLab 默认裁剪）
         c.setFillColor(COLOR_PRIMARY_DARK)
-        c.rect(-MARGIN_LEFT, -MARGIN_BOTTOM, self.width, self.height, fill=1, stroke=0)
+        c.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, fill=1, stroke=0)
 
         # 左侧装饰色块（中蓝）
         c.setFillColor(COLOR_PRIMARY_LIGHT)
         c.setFillAlpha(0.3)
-        c.rect(-MARGIN_LEFT, self.height * 0.35, self.width * 0.45,
+        c.rect(0, self.height * 0.35, self.width * 0.45,
                self.height * 0.3, fill=1, stroke=0)
         c.setFillAlpha(1)
 
-        # 顶部装饰线组
+        # 顶部装饰线组（以 PAGE_WIDTH 为基准，确保横跨整个页面）
         c.setStrokeColor(COLOR_ACCENT)
         c.setLineWidth(2.5)
-        c.line(0, self.height - 38 * mm, CONTENT_WIDTH, self.height - 38 * mm)
+        c.line(0, self.height - 38 * mm, PAGE_WIDTH, self.height - 38 * mm)
         c.setLineWidth(0.8)
-        c.line(0, self.height - 42 * mm, CONTENT_WIDTH * 0.6, self.height - 42 * mm)
+        c.line(0, self.height - 42 * mm, PAGE_WIDTH * 0.6, self.height - 42 * mm)
 
-        # 底部装饰线组
+        # 底部装饰线组（以 PAGE_WIDTH 为基准）
         c.setLineWidth(1.5)
-        c.line(0, 32 * mm, CONTENT_WIDTH, 32 * mm)
+        c.line(0, 32 * mm, PAGE_WIDTH, 32 * mm)
         c.setLineWidth(0.5)
         c.setStrokeColor(COLOR_ACCENT_LIGHT)
-        c.line(0, 28 * mm, CONTENT_WIDTH * 0.4, 28 * mm)
+        c.line(0, 28 * mm, PAGE_WIDTH * 0.4, 28 * mm)
 
         # 右上角装饰：大三角 + 小方块
         c.setFillColor(COLOR_ACCENT)
         c.setFillAlpha(0.15)
         # 三角
         path = c.beginPath()
-        path.moveTo(CONTENT_WIDTH, self.height * 0.65)
-        path.lineTo(CONTENT_WIDTH - 60 * mm, self.height * 0.65)
-        path.lineTo(CONTENT_WIDTH, self.height * 0.65 + 40 * mm)
+        path.moveTo(PAGE_WIDTH, self.height * 0.65)
+        path.lineTo(PAGE_WIDTH - 60 * mm, self.height * 0.65)
+        path.lineTo(PAGE_WIDTH, self.height * 0.65 + 40 * mm)
         path.close()
         c.drawPath(path, fill=1, stroke=0)
         c.setFillAlpha(1)
 
         # 几何方块
         c.setFillColor(COLOR_ACCENT)
-        c.rect(CONTENT_WIDTH - 18 * mm, self.height - 52 * mm, 10 * mm, 10 * mm, fill=1, stroke=0)
+        c.rect(PAGE_WIDTH - 18 * mm, self.height - 52 * mm, 10 * mm, 10 * mm, fill=1, stroke=0)
         c.setFillColor(COLOR_PRIMARY_LIGHT)
         c.setFillAlpha(0.5)
-        c.rect(CONTENT_WIDTH - 6 * mm, self.height - 48 * mm, 6 * mm, 6 * mm, fill=1, stroke=0)
+        c.rect(PAGE_WIDTH - 6 * mm, self.height - 48 * mm, 6 * mm, 6 * mm, fill=1, stroke=0)
         c.setFillAlpha(1)
 
 
 def build_cover_page(story, styles, title, subtitle, info_items=None):
-    """构建封面页 v2.0
+    """构建封面页 v2.1 - 优化垂直居中布局
 
     Args:
         story:      reportlab story列表
@@ -785,24 +787,21 @@ def build_cover_page(story, styles, title, subtitle, info_items=None):
     if info_items is None:
         info_items = []
 
-    # ★ 关键：先添加深蓝背景（必须在所有文字元素之前）
+    # 先添加深蓝背景（必须在所有文字元素之前）
     story.append(CoverBackground())
 
-    # 顶部留白
-    story.append(Spacer(1, 45 * mm))
-
-    # 主标题区域装饰线
-    story.append(Spacer(1, 8 * mm))
+    # 顶部留白 - 减小，让内容更居中
+    story.append(Spacer(1, 25 * mm))
 
     # 主标题（支持多行）
     for line in title.split('\n'):
         story.append(Paragraph(line, styles['cover_title']))
-    story.append(Spacer(1, 8 * mm))
+    story.append(Spacer(1, 6 * mm))
 
     # 副标题
     story.append(Paragraph(subtitle, styles['cover_subtitle']))
 
-    story.append(Spacer(1, 25 * mm))
+    story.append(Spacer(1, 20 * mm))
 
     # 信息卡片区（白色半透明效果）
     if info_items:
@@ -818,17 +817,22 @@ def build_cover_page(story, styles, title, subtitle, info_items=None):
                               fontSize=10, textColor=COLOR_WHITE, alignment=TA_LEFT, fontName=FONT_BOLD)),
             ])
 
-        info_table = Table(info_rows, colWidths=[40 * mm, 90 * mm])
+        info_table = Table(info_rows, colWidths=[35 * mm, 90 * mm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
             ('LEFTPADDING', (0, 0), (-1, -1), 6),
             ('RIGHTPADDING', (0, 0), (-1, -1), 6),
         ]))
-        story.append(info_table)
+        # 信息卡片居中
+        wrapper = Table([[info_table]], colWidths=[CONTENT_WIDTH])
+        wrapper.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        story.append(wrapper)
 
-    story.append(Spacer(1, 30 * mm))
+    story.append(Spacer(1, 25 * mm))
 
     # 底部标识
     story.append(Paragraph('量化策略分析系统', ParagraphStyle('CovBot',
